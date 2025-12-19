@@ -1,0 +1,3631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>To-Do List</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2d2d2d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ToDo">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <meta name="description" content="Powerful task management with recurring tasks, subtasks, and Google Drive sync">
+  
+  <!-- Google API Client Library -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      overflow: hidden;
+    }
+
+    .app {
+      position: relative;
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Clickable background layer */
+    .click-layer {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 20px; /* Leave space for scrollbar (typical width 15-20px) */
+      z-index: 1;
+      cursor: pointer;
+      pointer-events: all;
+    }
+
+    /* Dark mode - white text on dark background */
+    .app.dark-mode {
+      background: #1a1a1a;
+      color: white;
+    }
+
+    .app.dark-mode .sidebar {
+      background: #2d2d2d;
+      border-right: 1px solid #404040;
+    }
+
+    .app.dark-mode .nav-btn {
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app.dark-mode .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .app.dark-mode .nav-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .app.dark-mode input,
+    .app.dark-mode select {
+      background: #2d2d2d;
+      color: white;
+      border: 1px solid #404040;
+    }
+
+    .app.dark-mode .task-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app.dark-mode .btn {
+      background: #404040;
+    }
+
+    .app.dark-mode .btn:hover {
+      background: #505050;
+    }
+
+    .app.dark-mode .modal-bg {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    .app.dark-mode .modal {
+      background: #2d2d2d;
+    }
+
+    /* Light mode - black text on light background */
+    .app.light-mode {
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .sidebar {
+      background: #f5f5f5;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .app.light-mode .nav-btn {
+      color: #1a1a1a;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .app.light-mode .nav-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    .app.light-mode .nav-btn.active {
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .app.light-mode input,
+    .app.light-mode select {
+      background: #ffffff;
+      color: #1a1a1a;
+      border: 1px solid #d0d0d0;
+    }
+
+    .app.light-mode .task-item:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .app.light-mode .btn {
+      background: #e0e0e0;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .btn:hover {
+      background: #d0d0d0;
+    }
+
+    .app.light-mode .modal-bg {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .app.light-mode .modal {
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .close-btn {
+      color: #1a1a1a;
+    }
+
+    .sidebar {
+      position: relative;
+      width: var(--sidebar-width, 125px);
+      min-width: 100px;
+      max-width: 400px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+
+    .sidebar.hidden {
+      display: none;
+    }
+
+    .sidebar-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      cursor: ew-resize;
+      background: transparent;
+      z-index: 20;
+      transition: background 0.2s;
+    }
+
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.resizing {
+      background: rgba(59, 130, 246, 0.5);
+    }
+
+    .sidebar h1 {
+      font-size: 20px;
+      font-weight: 300;
+      margin-bottom: 24px;
+    }
+
+    .nav-btn {
+      text-align: left;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.2s;
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .settings-btn {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-content {
+      position: relative;
+      flex: 1;
+      padding: 32px;
+      overflow-y: auto;
+      overflow-anchor: none; /* Prevent browser from auto-adjusting scroll */
+      z-index: 2;
+      /* pointer-events removed to allow scrollbar to work */
+    }
+
+    .main-inner {
+      max-width: 700px;
+      margin: 0 auto;
+      pointer-events: all;
+    }
+
+    .add-task-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      pointer-events: auto;
+    }
+
+    .add-task-form.hidden {
+      display: none;
+    }
+
+    .add-task-form input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 16px;
+    }
+
+    .btn {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+
+    /* Utility classes to reduce inline styles */
+    .delete-btn {
+      padding: 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: opacity 0.2s, background 0.2s;
+    }
+
+    .delete-btn:hover {
+      opacity: 1;
+      background: rgba(220, 38, 38, 0.2);
+    }
+
+    .add-list-btn {
+      opacity: 0.6;
+      margin-top: 8px;
+    }
+
+    .list-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .list-btn-flex {
+      flex: 1;
+    }
+
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .completed-section {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid;
+    }
+
+    .app.dark-mode .completed-section {
+      border-top-color: #404040;
+    }
+
+    .app.light-mode .completed-section {
+      border-top-color: #d0d0d0;
+    }
+
+    .completed-section.hidden {
+      display: none;
+    }
+
+    .completed-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 14px;
+      font-weight: 400;
+      opacity: 0.3;
+      margin-bottom: 8px;
+      color: #888888;
+    }
+
+    .completed-header:hover {
+      opacity: 0.8;
+    }
+
+    .completed-header.expanded {
+      font-weight: 500;
+      opacity: 0.8;
+      color: inherit;
+    }
+
+    .completed-tasks {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .completed-tasks.hidden {
+      display: none;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.2s;
+      pointer-events: auto;
+    }
+
+    .task-item[draggable="true"]:hover {
+      background: rgba(128, 128, 128, 0.1);
+      cursor: move;
+    }
+
+    .task-item[draggable="true"]:active {
+      opacity: 0.5;
+    }
+
+    .nav-btn.drag-over {
+      background: rgba(100, 200, 100, 0.2) !important;
+      border-left: 3px solid #4ade80;
+    }
+
+    .task-item.completed {
+      opacity: 0.5;
+    }
+
+    .task-item.subtask {
+      margin-left: 40px;
+    }
+
+    .task-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .task-text {
+      flex: 1;
+    }
+
+    .task-text.completed {
+      text-decoration: line-through;
+    }
+
+    .countdown {
+      font-size: 14px;
+      opacity: 0.7;
+      margin-left: 8px;
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .task-item:hover .task-actions {
+      opacity: 1;
+    }
+
+    .icon-btn {
+      padding: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .icon-btn.delete:hover {
+      background: #dc2626;
+    }
+
+    .expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      opacity: 0.5;
+      display: flex;
+      align-items: center;
+    }
+
+    .expand-btn:hover {
+      opacity: 1;
+    }
+
+    .task-options {
+      margin-left: 28px;
+      margin-top: 8px;
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .task-options label {
+      display: block;
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 4px;
+    }
+
+    .task-options input,
+    .task-options select {
+      width: 100%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 100;
+    }
+
+    .modal-bg.hidden {
+      display: none;
+    }
+
+    .modal {
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .modal-header h2 {
+      font-size: 20px;
+      font-weight: 300;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      padding: 4px;
+    }
+
+    .settings-section {
+      margin-bottom: 24px;
+    }
+
+    .settings-section label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .work-days {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .day-btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 10;
+      }
+    }
+
+    /* Completion celebration animations */
+    @keyframes strikeThrough {
+      from {
+        width: 0;
+      }
+      to {
+        width: 100%;
+      }
+    }
+
+    @keyframes taskBounce {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    @keyframes checkboxFlash {
+      0%, 100% {
+        background: transparent;
+      }
+      50% {
+        background: rgba(34, 197, 94, 0.3);
+      }
+    }
+
+    @keyframes confetti {
+      0% {
+        transform: translateY(0) translateX(0) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-50px) translateX(var(--tx)) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    .completing-task {
+      animation: taskBounce 0.3s ease-out;
+    }
+
+    .completing-task input[type="checkbox"] {
+      animation: checkboxFlash 0.3s ease-out;
+    }
+
+    .strike-through-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 2px;
+      background: currentColor;
+      animation: strikeThrough 0.3s ease-out forwards;
+    }
+
+    .confetti-particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: confetti 0.6s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    // ===== CONSTANTS =====
+    const VIEWS = {
+      TODAY: 'today',
+      NOTEPAD: 'notepad',
+      PROJECTS: 'projects',
+      DUEBY: 'dueby',
+      RECURRING: 'recurring'
+    };
+    
+    const SORT_TYPES = {
+      CREATION: 'creation',
+      ALPHABETICAL: 'alphabetical',
+      DUE_DATE: 'duedate',
+      NEXT_RECURRENCE: 'nextrecurrence'
+    };
+    
+    // ===== HELPER FUNCTIONS =====
+    // Check if current view is a list view (today, notepad, projects, or custom)
+    function isListView() {
+      return [VIEWS.TODAY, VIEWS.NOTEPAD, VIEWS.PROJECTS].includes(state.view) || 
+             state.view.startsWith('custom-');
+    }
+    
+    // Check if current view is a special view (dueby or recurring)
+    function isSpecialView() {
+      return [VIEWS.DUEBY, VIEWS.RECURRING].includes(state.view);
+    }
+    
+    // Check if a task should be shown in a list view (notepad, projects, or custom list)
+    function checkListViewTask(task, viewName, today) {
+      // Show non-recurring tasks created in this view
+      if (task.createdIn === viewName && !task.recurring) return true;
+      
+      // Show recurring tasks created in this view that are due today (and not completed today)
+      if (task.createdIn === viewName && task.recurring && !task.recurringPaused && taskRecursToday(task, today)) {
+        const todayStr = today.toDateString();
+        if (task.completionHistory && task.completionHistory.includes(todayStr)) {
+          return false;
+        }
+        return true;
+      }
+      
+      return false;
+    }
+    
+    // Input validation functions
+    function validateTaskText(text) {
+      if (!text || typeof text !== 'string') return '';
+      const trimmed = text.trim();
+      return trimmed.length > 0 && trimmed.length <= 500 ? trimmed : '';
+    }
+    
+    function validateListName(name) {
+      if (!name || typeof name !== 'string') return '';
+      const trimmed = name.trim();
+      // Remove special characters that might cause issues
+      const cleaned = trimmed.replace(/[<>:"\/\\|?*]/g, '');
+      return cleaned.length > 0 && cleaned.length <= 50 ? cleaned : '';
+    }
+    
+    function validateDaysAhead(days) {
+      const num = parseInt(days);
+      return (!isNaN(num) && num >= 1 && num <= 365) ? num : 7;
+    }
+    
+    // Debounced saveState to reduce localStorage writes
+    let saveTimeout = null;
+    function debouncedSaveState() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => saveState(), 300);
+    }
+    
+    // ===== PWA INSTALLATION =====
+    let deferredPrompt;
+    let isInstalled = false;
+    
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      isInstalled = true;
+    }
+    
+    // Listen for install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      render();
+    });
+    
+    // Install PWA
+    async function installPWA() {
+      if (!deferredPrompt) {
+        alert('App is already installed or cannot be installed on this device');
+        return;
+      }
+      
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        console.log('PWA installed');
+      }
+      
+      deferredPrompt = null;
+      render();
+    }
+    
+    // Register service worker (for PWA)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => {
+            console.log('✅ Service Worker registered:', registration);
+          })
+          .catch(error => {
+            // This is expected when testing locally without service-worker.js
+            console.log('ℹ️ Service Worker not available (this is normal for local testing)');
+          });
+      });
+    }
+    
+    // Initialize Google API when page loads
+    window.addEventListener('load', () => {
+      if (typeof initGoogleAPI === 'function') {
+        initGoogleAPI()
+          .then(() => {
+            console.log('Google API initialization complete');
+          })
+          .catch(error => {
+            console.error('Failed to initialize Google API:', error);
+          });
+      }
+    });
+    
+    // Simple state management
+    let state = {
+      tasks: [],
+      taskMap: new Map(), // O(1) task lookups
+      view: 'today',
+      showMenu: true,
+      darkMode: 'dark',
+      showSettings: false,
+      showCountdown: true,
+      showDueDate: true,
+      sidebarWidth: 125, // Adjustable sidebar width in pixels
+      viewSortPreferences: {
+        today: 'creation',
+        notepad: 'creation',
+        projects: 'creation',
+        dueby: 'duedate',
+        recurring: 'creation'
+      }, // Per-view sort preferences
+      reverseSortOrder: {}, // Map of view to boolean - true means reverse the sort
+      workDays: [1, 2, 3, 4, 5],
+      expandedDueDate: null,
+      expandedRecurring: null,
+      editingTask: null,
+      showCompleted: false,
+      customLists: [], // Array of {id, name} objects
+      draggingTask: null, // Track which task is being dragged
+      expandedGroups: {}, // Track which groups are expanded in recurring/dueby views
+      listDaysAhead: {}, // Map of list ID to number of days ahead (default 7)
+      domInitialized: false // Track if initial DOM render is complete
+    };
+    
+    // Scroll preservation using scrollIntoView (most reliable method)
+    let scrollAnchorId = null;
+    let scrollAnchorType = null; // 'task' or 'group'
+    
+    // Save which element is visible
+    function saveScrollPosition() {
+      const mainContent = document.querySelector('.main-content');
+      if (!mainContent) return;
+      
+      // Try to find a task first
+      const tasks = mainContent.querySelectorAll('[data-task-id]');
+      const containerRect = mainContent.getBoundingClientRect();
+      
+      for (let task of tasks) {
+        const rect = task.getBoundingClientRect();
+        
+        // Find first visible task
+        if (rect.top >= containerRect.top - 50 && rect.top <= containerRect.bottom) {
+          scrollAnchorId = task.getAttribute('data-task-id');
+          scrollAnchorType = 'task';
+          return;
+        }
+      }
+      
+      // If no task found, try groups
+      const groups = mainContent.querySelectorAll('[data-group]');
+      for (let group of groups) {
+        const rect = group.getBoundingClientRect();
+        
+        if (rect.top >= containerRect.top - 50 && rect.top <= containerRect.bottom) {
+          scrollAnchorId = group.getAttribute('data-group');
+          scrollAnchorType = 'group';
+          return;
+        }
+      }
+    }
+    
+    // Restore by scrolling the element back into view
+    function restoreScrollPosition() {
+      if (!scrollAnchorId) return;
+      
+      const mainContent = document.querySelector('.main-content');
+      if (!mainContent) return;
+      
+      let anchorElement = null;
+      
+      if (scrollAnchorType === 'task') {
+        anchorElement = mainContent.querySelector(`[data-task-id="${scrollAnchorId}"]`);
+      } else if (scrollAnchorType === 'group') {
+        anchorElement = mainContent.querySelector(`[data-group="${scrollAnchorId}"]`);
+      }
+      
+      if (anchorElement) {
+        // Use scrollIntoView with specific options to maintain position
+        anchorElement.scrollIntoView({
+          behavior: 'instant',
+          block: 'start',
+          inline: 'nearest'
+        });
+      }
+    }
+    
+    // Sync task map for O(1) lookups
+    function syncTaskMap() {
+      state.taskMap.clear();
+      state.tasks.forEach(task => {
+        state.taskMap.set(task.id, task);
+        // Also add subtasks
+        if (task.subtasks) {
+          task.subtasks.forEach(subtask => {
+            state.taskMap.set(subtask.id, subtask);
+          });
+        }
+      });
+    }
+
+    // Load from localStorage
+    function loadState() {
+      try {
+        const savedTasks = localStorage.getItem('tasks');
+        if (savedTasks) {
+          state.tasks = JSON.parse(savedTasks).map(task => ({
+            ...task,
+            recurringDays: task.recurringDays || [0, 1, 2, 3, 4, 5, 6],
+            recurringMonthly: task.recurringMonthly || null,
+            recurringPaused: task.recurringPaused || false,
+            completionHistory: task.completionHistory || []
+          }));
+        }
+        
+        const savedSettings = localStorage.getItem('settings');
+        if (savedSettings) {
+          const settings = JSON.parse(savedSettings);
+          // Handle legacy mode names
+          let mode = settings.darkMode || 'dark';
+          if (mode === 'white') mode = 'dark';
+          if (mode === 'black') mode = 'light';
+          state.darkMode = mode;
+          state.showCountdown = settings.showCountdown !== false;
+          state.showDueDate = settings.showDueDate !== false;
+          state.sidebarWidth = settings.sidebarWidth || 125;
+          state.viewSortPreferences = settings.viewSortPreferences || {
+            today: 'creation',
+            notepad: 'creation',
+            projects: 'creation',
+            dueby: 'duedate',
+            recurring: 'creation'
+          };
+          state.reverseSortOrder = settings.reverseSortOrder || {};
+          state.workDays = settings.workDays || [1, 2, 3, 4, 5];
+          state.customLists = settings.customLists || [];
+          state.listDaysAhead = settings.listDaysAhead || {};
+        }
+        
+        // Sync task map after loading
+        syncTaskMap();
+      } catch (e) {
+        console.error('Failed to load state', e);
+      }
+    }
+
+    // Save to localStorage
+    function saveState() {
+      try {
+        localStorage.setItem('tasks', JSON.stringify(state.tasks));
+        localStorage.setItem('settings', JSON.stringify({
+          darkMode: state.darkMode,
+          showCountdown: state.showCountdown,
+          showDueDate: state.showDueDate,
+          sidebarWidth: state.sidebarWidth,
+          viewSortPreferences: state.viewSortPreferences,
+          reverseSortOrder: state.reverseSortOrder,
+          workDays: state.workDays,
+          customLists: state.customLists,
+          listDaysAhead: state.listDaysAhead
+        }));
+      } catch (e) {
+        console.error('Failed to save state', e);
+      }
+    }
+
+    // Get the number of days ahead for a specific list (default 7)
+    function getDaysAheadForList(listId) {
+      return state.listDaysAhead[listId] || 7;
+    }
+
+    // Update days ahead for a list
+    function updateListDaysAhead(listId, days) {
+      state.listDaysAhead[listId] = parseInt(days);
+      debouncedSaveState();
+      render();
+    }
+
+    // Update sort preference for a view
+    function updateViewSort(viewId, sortType) {
+      state.viewSortPreferences[viewId] = sortType;
+      debouncedSaveState();
+      render();
+    }
+    
+    // Toggle reverse sort order for a view
+    function toggleReverseSortOrder(viewId) {
+      state.reverseSortOrder[viewId] = !state.reverseSortOrder[viewId];
+      debouncedSaveState();
+      render();
+    }
+
+    // Generate unique ID
+    function generateId() {
+      return Date.now() + Math.random();
+    }
+
+    // Sidebar resize functionality
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    function startResize(e) {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = state.sidebarWidth;
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      
+      // Add resizing class to handle
+      const handle = document.querySelector('.sidebar-resize-handle');
+      if (handle) handle.classList.add('resizing');
+      
+      e.preventDefault();
+    }
+
+    function resize(e) {
+      if (!isResizing) return;
+      
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(100, Math.min(400, startWidth + delta));
+      
+      state.sidebarWidth = newWidth;
+      document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+    }
+
+    function stopResize() {
+      if (!isResizing) return;
+      
+      isResizing = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      
+      // Remove resizing class from handle
+      const handle = document.querySelector('.sidebar-resize-handle');
+      if (handle) handle.classList.remove('resizing');
+      
+      debouncedSaveState();
+    }
+
+    // Set up resize listeners
+    document.addEventListener('mousemove', resize);
+    document.addEventListener('mouseup', stopResize);
+
+    // Toggle menu
+    function toggleMenu() {
+      state.showMenu = !state.showMenu;
+      render();
+    }
+
+    // Add custom list
+    function addCustomList() {
+      const name = prompt('Enter list name:');
+      if (!name || !name.trim()) return;
+      
+      const newList = {
+        id: 'custom-' + generateId(),
+        name: name.trim()
+      };
+      
+      state.customLists.push(newList);
+      debouncedSaveState();
+      render();
+    }
+
+    // Delete custom list
+    function deleteCustomList(listId) {
+      if (!confirm('Delete this list? Tasks in this list will be moved to Today.')) return;
+      
+      // Move tasks from this list to today
+      state.tasks = state.tasks.map(task => 
+        task.createdIn === listId ? { ...task, createdIn: 'today' } : task
+      );
+      
+      // Remove the list
+      state.customLists = state.customLists.filter(list => list.id !== listId);
+      
+      // If currently viewing this list, switch to today
+      if (state.view === listId) {
+        state.view = 'today';
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Export all data to JSON file
+    function exportToFile() {
+      const data = {
+        tasks: state.tasks,
+        settings: {
+          darkMode: state.darkMode,
+          showCountdown: state.showCountdown,
+          showDueDate: state.showDueDate,
+          sidebarWidth: state.sidebarWidth,
+          viewSortPreferences: state.viewSortPreferences,
+          workDays: state.workDays,
+          customLists: state.customLists,
+          listDaysAhead: state.listDaysAhead
+        },
+        expandedGroups: state.expandedGroups,
+        exportDate: new Date().toISOString(),
+        version: "1.0",
+        appName: "To-Do List"
+      };
+      
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `todo-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert('Backup file downloaded! Upload it to Google Drive for safekeeping.');
+    }
+
+    // Import data from JSON file
+    function importFromFile(file) {
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          
+          // Validate data structure
+          if (!data.tasks || !data.settings) {
+            alert('Invalid backup file format.');
+            return;
+          }
+          
+          // Show import preview
+          const exportDate = data.exportDate ? new Date(data.exportDate).toLocaleString() : 'Unknown date';
+          const taskCount = data.tasks.length;
+          const confirmMsg = `Import backup from ${exportDate}?\n\n` +
+                           `This backup contains ${taskCount} task(s).\n` +
+                           `Your current data will be replaced.\n\n` +
+                           `Are you sure?`;
+          
+          if (!confirm(confirmMsg)) {
+            return;
+          }
+          
+          // Restore data
+          state.tasks = data.tasks;
+          state.darkMode = data.settings.darkMode || 'dark';
+          state.showCountdown = data.settings.showCountdown !== false;
+          state.showDueDate = data.settings.showDueDate !== false;
+          state.sidebarWidth = data.settings.sidebarWidth || 125;
+          state.viewSortPreferences = data.settings.viewSortPreferences || {
+            today: 'creation',
+            notepad: 'creation',
+            projects: 'creation',
+            dueby: 'duedate',
+            recurring: 'creation'
+          };
+          state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
+          state.customLists = data.settings.customLists || [];
+          state.listDaysAhead = data.settings.listDaysAhead || {};
+          state.expandedGroups = data.expandedGroups || {};
+          
+          // Save and re-render
+          saveState(); // Use immediate save for restore
+          render();
+          
+          alert(`Backup restored successfully!\n${taskCount} task(s) imported.`);
+        } catch (error) {
+          alert('Error reading backup file:\n' + error.message);
+          console.error('Import error:', error);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Drag and drop functions
+    function startDrag(taskId, event) {
+      const task = state.taskMap.get(taskId);
+      
+      // Don't allow dragging from recurring or dueby views
+      if (state.view === 'recurring' || state.view === 'dueby') {
+        event.preventDefault();
+        return;
+      }
+      
+      // Don't drag if task has recurring or due date (they belong to those views)
+      if (task && (task.recurring || task.dueDate)) {
+        event.preventDefault();
+        return;
+      }
+      
+      state.draggingTask = taskId;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/html', event.target.innerHTML);
+    }
+
+    function allowDrop(targetView, event) {
+      // Don't allow dropping into recurring or dueby
+      if (targetView === 'recurring' || targetView === 'dueby') {
+        return;
+      }
+      
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    function dropTask(targetView, event) {
+      event.preventDefault();
+      
+      // Don't allow dropping into recurring or dueby
+      if (targetView === 'recurring' || targetView === 'dueby') {
+        return;
+      }
+      
+      if (!state.draggingTask) return;
+      
+      const taskId = state.draggingTask;
+      
+      // Update task's createdIn
+      state.tasks = state.tasks.map(task =>
+        task.id === taskId ? { ...task, createdIn: targetView } : task
+      );
+      
+      state.draggingTask = null;
+      debouncedSaveState();
+      render();
+    }
+
+    function endDrag() {
+      state.draggingTask = null;
+    }
+
+    // Toggle group expansion in recurring/dueby views
+    function toggleGroup(groupId) {
+      if (!state.expandedGroups[groupId]) {
+        state.expandedGroups[groupId] = true;
+      } else {
+        state.expandedGroups[groupId] = !state.expandedGroups[groupId];
+      }
+      
+      const useIncremental = shouldUseIncrementalUpdate();
+      
+      if (useIncremental) {
+        // Update DOM directly
+        toggleGroupDOM(groupId);
+      } else {
+        render();
+      }
+    }
+
+    // Get group name for display
+    function getGroupName(createdIn) {
+      if (createdIn === 'today') return 'Today';
+      if (createdIn === 'notepad') return 'Notepad';
+      if (createdIn === 'projects') return 'Projects';
+      if (createdIn === 'dueby') return 'Due By';
+      if (createdIn === 'recurring') return 'Recurring';
+      if (createdIn.startsWith('custom-')) {
+        const list = state.customLists.find(l => l.id === createdIn);
+        return list ? list.name : 'Custom List';
+      }
+      return 'Other';
+    }
+
+    // Add task
+    function addTask(text, parentId = null) {
+      const validatedText = validateTaskText(text);
+      if (!validatedText) return;
+      
+      // Determine createdIn based on current view
+      let createdIn = VIEWS.TODAY;
+      if (state.view === VIEWS.NOTEPAD) {
+        createdIn = VIEWS.NOTEPAD;
+      } else if (state.view === VIEWS.PROJECTS) {
+        createdIn = VIEWS.PROJECTS;
+      } else if (state.view === VIEWS.DUEBY) {
+        createdIn = VIEWS.DUEBY;
+      } else if (state.view === VIEWS.RECURRING) {
+        createdIn = VIEWS.RECURRING;
+      } else if (state.view.startsWith('custom-')) {
+        createdIn = state.view;
+      }
+      
+      const newTask = {
+        id: generateId(),
+        text: validatedText,
+        completed: false,
+        createdIn: createdIn,
+        dueDate: null,
+        recurring: null,
+        recurringDays: [0, 1, 2, 3, 4, 5, 6], // For daily/weekly - which days it recurs
+        recurringMonthly: null, // For monthly - day number or description
+        recurringPaused: false, // When true, stops appearing in today
+        completionHistory: [], // Track when task was completed (for recurring tasks)
+        subtasks: [],
+        expanded: false,
+        parentId
+      };
+
+      if (parentId) {
+        state.tasks = state.tasks.map(task =>
+          task.id === parentId
+            ? { ...task, subtasks: [newTask, ...task.subtasks] }
+            : task
+        );
+      } else {
+        state.tasks.unshift(newTask);
+      }
+      
+      debouncedSaveState();
+      
+      const useIncremental = shouldUseIncrementalUpdate();
+      
+      if (useIncremental && !parentId) {
+        // Add element to DOM incrementally (only for main tasks, not subtasks)
+        addTaskElementToDOM(newTask);
+      } else {
+        // For subtasks or when incremental isn't available, full re-render
+        render();
+      }
+    }
+
+    // Undo recurring task completion for today
+    function undoRecurringCompletion(taskId) {
+      const today = new Date().toDateString();
+      // Remove the actual task ID (strip the completion record suffix)
+      const actualTaskId = typeof taskId === 'string' && taskId.includes('-completion-') 
+        ? parseFloat(taskId.split('-completion-')[0])
+        : taskId;
+      
+      const task = state.taskMap.get(actualTaskId);
+      if (task) {
+        const completionHistory = (task.completionHistory || []).filter(d => d !== today);
+        updateTaskById(actualTaskId, { completionHistory });
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Restore/unpause a recurring task
+    function restoreRecurringTask(taskId) {
+      updateTaskById(taskId, { recurringPaused: false, completed: false });
+      debouncedSaveState();
+      render();
+    }
+
+    // Create confetti effect
+    function createConfetti(element) {
+      const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'];
+      const particleCount = 5;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'confetti-particle';
+        particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+        particle.style.left = '50%';
+        particle.style.top = '50%';
+        particle.style.setProperty('--tx', `${(Math.random() - 0.5) * 100}px`);
+        particle.style.animationDelay = `${i * 0.05}s`;
+        
+        element.style.position = 'relative';
+        element.appendChild(particle);
+        
+        setTimeout(() => particle.remove(), 700);
+      }
+    }
+
+    // Animate task completion with celebration
+    function celebrateCompletion(taskId, isSubtask = false) {
+      return new Promise((resolve) => {
+        // Find the task element
+        const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (!taskElement) {
+          resolve();
+          return;
+        }
+        
+        // Add bounce animation
+        taskElement.classList.add('completing-task');
+        
+        // Add strike-through line
+        const taskText = taskElement.querySelector('.task-text');
+        if (taskText) {
+          const strike = document.createElement('div');
+          strike.className = 'strike-through-line';
+          taskText.style.position = 'relative';
+          taskText.appendChild(strike);
+        }
+        
+        // Create confetti
+        createConfetti(taskElement);
+        
+        // Wait for animations to complete
+        setTimeout(() => {
+          taskElement.classList.remove('completing-task');
+          resolve();
+        }, 400);
+      });
+    }
+
+    // ===== INCREMENTAL DOM UPDATE FUNCTIONS =====
+    
+    // Get container for tasks based on current view and completion status
+    function getTaskContainer(isCompleted, groupKey = null) {
+      const mainInner = document.querySelector('.main-inner');
+      if (!mainInner) return null;
+      
+      if (groupKey) {
+        // Find the specific group container
+        const groupContainer = mainInner.querySelector(`[data-group="${groupKey}"]`)?.nextElementSibling;
+        return groupContainer;
+      }
+      
+      if (isCompleted) {
+        // Find or create completed section
+        let completedSection = mainInner.querySelector('.completed-section');
+        if (!completedSection) {
+          completedSection = document.createElement('div');
+          completedSection.className = 'completed-section';
+          mainInner.appendChild(completedSection);
+        }
+        return completedSection.querySelector('.task-list') || completedSection;
+      } else {
+        // Incomplete tasks section
+        return mainInner.querySelector('.task-list');
+      }
+    }
+    
+    // Find task element in DOM
+    function findTaskElement(taskId) {
+      return document.querySelector(`[data-task-id="${taskId}"]`);
+    }
+    
+    // Update a single task element's checkbox and styling
+    function updateTaskElementState(taskId, isCompleted) {
+      const taskElement = findTaskElement(taskId);
+      if (!taskElement) return;
+      
+      const checkbox = taskElement.querySelector('input[type="checkbox"]');
+      const taskText = taskElement.querySelector('.task-text');
+      
+      if (checkbox) {
+        checkbox.checked = isCompleted;
+      }
+      
+      if (taskText) {
+        if (isCompleted) {
+          taskText.classList.add('completed');
+          taskElement.classList.add('completed');
+        } else {
+          taskText.classList.remove('completed');
+          taskElement.classList.remove('completed');
+        }
+      }
+    }
+    
+    // Move task element between sections (incomplete <-> completed)
+    function moveTaskElement(taskId, toCompleted, groupKey = null) {
+      const taskElement = findTaskElement(taskId);
+      if (!taskElement) return;
+      
+      const targetContainer = getTaskContainer(toCompleted, groupKey);
+      if (targetContainer) {
+        targetContainer.appendChild(taskElement.parentElement || taskElement);
+      }
+    }
+    
+    // Remove task element from DOM
+    function removeTaskElement(taskId) {
+      const taskElement = findTaskElement(taskId);
+      if (taskElement) {
+        const parent = taskElement.parentElement;
+        if (parent) {
+          parent.remove();
+        } else {
+          taskElement.remove();
+        }
+      }
+    }
+    
+    // Update task text content
+    function updateTaskText(taskId, newText) {
+      const taskElement = findTaskElement(taskId);
+      if (!taskElement) return;
+      
+      const taskTextSpan = taskElement.querySelector('.task-text');
+      if (taskTextSpan) {
+        // Find the text node or update the whole span
+        const textContent = taskTextSpan.childNodes[0];
+        if (textContent && textContent.nodeType === Node.TEXT_NODE) {
+          textContent.textContent = newText;
+        } else {
+          // Fallback: trigger a small re-render for this task
+          const task = state.taskMap.get(taskId);
+          if (task) {
+            const wrapper = taskElement.parentElement;
+            if (wrapper) {
+              wrapper.innerHTML = renderTask(task);
+            }
+          }
+        }
+      }
+    }
+    
+    // Add new task element to DOM
+    function addTaskElementToDOM(task) {
+      const mainInner = document.querySelector('.main-inner');
+      if (!mainInner) return;
+      
+      // Determine which section to add to
+      const shouldGroup = shouldGroupTasks();
+      const isCompleted = task.completed;
+      
+      if (shouldGroup) {
+        // Find the appropriate group
+        const groupKey = task.createdIn || 'today';
+        let groupContainer = mainInner.querySelector(`[data-group="${groupKey}"]`)?.nextElementSibling;
+        
+        if (groupContainer) {
+          // Create task element
+          const taskHTML = renderTask(task);
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = taskHTML;
+          const taskElement = tempDiv.firstElementChild;
+          
+          // Insert at the beginning (newest first)
+          groupContainer.insertBefore(taskElement, groupContainer.firstChild);
+        } else {
+          // Group doesn't exist yet, need full re-render
+          render();
+        }
+      } else {
+        // No grouping, add to main list
+        const taskList = isCompleted 
+          ? mainInner.querySelector('.completed-section .task-list') || mainInner.querySelector('.task-list')
+          : mainInner.querySelector('.task-list');
+        
+        if (taskList) {
+          const taskHTML = renderTask(task);
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = taskHTML;
+          const taskElement = tempDiv.firstElementChild;
+          
+          // Insert at the beginning (newest first)
+          taskList.insertBefore(taskElement, taskList.firstChild);
+        }
+      }
+    }
+    
+    // Toggle group expand/collapse without full re-render
+    function toggleGroupDOM(groupKey) {
+      const groupHeader = document.querySelector(`[data-group="${groupKey}"]`);
+      if (!groupHeader) return;
+      
+      const groupContent = groupHeader.nextElementSibling;
+      if (!groupContent) return;
+      
+      const isExpanded = state.expandedGroups[groupKey] !== false;
+      
+      // Update arrow
+      const arrow = groupHeader.querySelector('span:first-child');
+      if (arrow) {
+        arrow.textContent = isExpanded ? '▼' : '▶';
+      }
+      
+      // Update visibility
+      if (isExpanded) {
+        groupContent.style.display = 'flex';
+      } else {
+        groupContent.style.display = 'none';
+      }
+      
+      // Update opacity
+      groupHeader.style.opacity = isExpanded ? '0.8' : '0.3';
+      groupHeader.style.fontWeight = isExpanded ? '500' : '400';
+    }
+    
+    // Check if we should use incremental update or full render
+    function shouldUseIncrementalUpdate() {
+      // Use incremental only if DOM is initialized and we're not changing views
+      return state.domInitialized && 
+             !state.showSettings && 
+             document.querySelector('.main-inner') !== null;
+    }
+
+    // Toggle task completion (handles recurring tasks specially)
+    async function toggleTask(taskId, parentId = null, fromView = null) {
+      const task = state.taskMap.get(taskId);
+      const useIncremental = shouldUseIncrementalUpdate();
+      
+      if (task && task.recurring && !task.recurringPaused) {
+        // Recurring task in today, notepad, projects, or custom list - just log completion for today
+        if (isListView()) {
+          const today = new Date().toDateString();
+          const completionHistory = task.completionHistory || [];
+          
+          // Check if already completed today
+          const isCompletingToday = !completionHistory.includes(today);
+          
+          if (isCompletingToday) {
+            // Complete for today - CELEBRATE!
+            await celebrateCompletion(taskId);
+            updateTaskById(taskId, { 
+              completionHistory: [...completionHistory, today] 
+            });
+          } else {
+            // Uncomplete for today
+            updateTaskById(taskId, { 
+              completionHistory: completionHistory.filter(d => d !== today) 
+            });
+          }
+          
+          debouncedSaveState();
+          
+          // Incremental update for recurring tasks - just update checkbox state
+          if (useIncremental) {
+            updateTaskElementState(taskId, isCompletingToday);
+          } else {
+            render();
+          }
+          return;
+        }
+        
+        // Recurring task in recurring view - pause it without warning
+        if (state.view === 'recurring') {
+          await celebrateCompletion(taskId);
+          updateTaskById(taskId, { recurringPaused: true, completed: true });
+          debouncedSaveState();
+          
+          // Incremental update: remove from DOM
+          if (useIncremental) {
+            removeTaskElement(taskId);
+          } else {
+            render();
+          }
+          return;
+        }
+      }
+      
+      // Normal completion for non-recurring tasks or subtasks
+      if (parentId) {
+        // SUBTASK - also needs to move between sections, use full render
+        const parent = state.taskMap.get(parentId);
+        const subtask = parent?.subtasks.find(s => s.id === taskId);
+        if (subtask) {
+          const wasCompleted = subtask.completed;
+          
+          // Only celebrate if completing (not uncompleting)
+          if (!wasCompleted) {
+            await celebrateCompletion(taskId, true);
+          }
+          
+          const updates = {
+            completed: !wasCompleted,
+            completedAt: !wasCompleted ? new Date().toISOString() : null
+          };
+          updateSubtaskById(parentId, taskId, updates);
+          
+          debouncedSaveState();
+          
+          // Use full render to properly handle subtask section movement
+          // (incomplete subtasks vs completed subtasks sections)
+          render();
+        }
+      } else {
+        // MAIN TASK - use full render to handle section movement properly
+        const wasCompleted = task.completed;
+        
+        // Only celebrate if completing (not uncompleting)
+        if (!wasCompleted) {
+          await celebrateCompletion(taskId);
+        }
+        
+        const updates = {
+          completed: !wasCompleted,
+          completedAt: !wasCompleted ? new Date().toISOString() : null
+        };
+        updateTaskById(taskId, updates);
+        
+        debouncedSaveState();
+        
+        // Use full render for main tasks to properly handle completed/incomplete section movement
+        // and ensure proper visual feedback
+        render();
+      }
+    }
+
+    // Toggle expanded
+    function toggleExpanded(taskId) {
+      const task = state.taskMap.get(taskId);
+      if (task) {
+        const newExpanded = !task.expanded;
+        updateTaskById(taskId, { expanded: newExpanded });
+        
+        // Always use full render for expand/collapse
+        // This ensures subtasks appear/disappear correctly
+        render();
+      }
+    }
+
+    // Delete task
+    function deleteTask(taskId, parentId = null) {
+      if (parentId) {
+        state.tasks = state.tasks.map(task =>
+          task.id === parentId
+            ? { ...task, subtasks: task.subtasks.filter(sub => sub.id !== taskId) }
+            : task
+        );
+      } else {
+        state.tasks = state.tasks.filter(task => task.id !== taskId);
+      }
+      
+      saveState();
+      
+      const useIncremental = shouldUseIncrementalUpdate();
+      
+      if (useIncremental) {
+        // Simply remove the element from DOM
+        removeTaskElement(taskId);
+      } else {
+        render();
+      }
+    }
+
+    // Duplicate task
+    function duplicateTask(taskId, parentId = null) {
+      saveScrollPosition();
+      const sourceTask = parentId 
+        ? state.taskMap.get(parentId)?.subtasks.find(s => s.id === taskId)
+        : state.taskMap.get(taskId);
+      
+      if (!sourceTask) return;
+      
+      // Create a deep copy of the task with new IDs
+      const duplicateSubtasks = (subtasks) => {
+        return subtasks.map(sub => ({
+          ...sub,
+          id: generateId(),
+          subtasks: sub.subtasks ? duplicateSubtasks(sub.subtasks) : []
+        }));
+      };
+      
+      const duplicatedTask = {
+        ...sourceTask,
+        id: generateId(),
+        completed: false,
+        completedAt: null,
+        completionHistory: [], // Reset completion history for duplicates
+        subtasks: duplicateSubtasks(sourceTask.subtasks || [])
+      };
+      
+      if (parentId) {
+        // Duplicate as a subtask
+        state.tasks = state.tasks.map(task =>
+          task.id === parentId
+            ? { ...task, subtasks: [...task.subtasks, duplicatedTask] }
+            : task
+        );
+      } else {
+        // Duplicate as a main task - insert right after the original
+        const index = state.tasks.findIndex(t => t.id === taskId);
+        state.tasks.splice(index + 1, 0, duplicatedTask);
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Update task date
+    function updateTaskDate(taskId, dueDate, parentId = null) {
+      if (parentId) {
+        // Updating a subtask's due date
+        state.tasks = state.tasks.map(task => {
+          if (task.id === parentId) {
+            // Update the subtask
+            const updatedSubtasks = task.subtasks.map(sub =>
+              sub.id === taskId ? { ...sub, dueDate } : sub
+            );
+            
+            // If parent doesn't have a due date, set it to the earliest subtask due date
+            let parentDueDate = task.dueDate;
+            if (!parentDueDate && dueDate) {
+              // Find the earliest due date among subtasks
+              const subtaskDueDates = updatedSubtasks
+                .map(sub => sub.dueDate)
+                .filter(d => d)
+                .sort();
+              
+              if (subtaskDueDates.length > 0) {
+                parentDueDate = subtaskDueDates[0];
+              }
+            }
+            
+            return { ...task, subtasks: updatedSubtasks, dueDate: parentDueDate };
+          }
+          return task;
+        });
+      } else {
+        // Updating a parent task's due date
+        state.tasks = state.tasks.map(task =>
+          task.id === taskId ? { ...task, dueDate } : task
+        );
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Update task recurring
+    function updateTaskRecurring(taskId, recurring) {
+      const task = state.taskMap.get(taskId);
+      if (task) {
+        // Set defaults based on recurring type
+        let recurringDays = task.recurringDays || [0, 1, 2, 3, 4, 5, 6];
+        if (recurring === 'weekdays') {
+          recurringDays = state.workDays;
+        } else if (recurring === 'weekends') {
+          recurringDays = [0, 6]; // Sunday and Saturday
+        } else if (recurring === 'weekly') {
+          recurringDays = [1]; // Default to Monday
+        }
+        updateTaskById(taskId, { recurring, recurringDays });
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Toggle recurring day
+    function toggleRecurringDay(taskId, day) {
+      const task = state.taskMap.get(taskId);
+      if (task) {
+        let recurringDays = task.recurringDays || [];
+        if (recurringDays.includes(day)) {
+          recurringDays = recurringDays.filter(d => d !== day);
+        } else {
+          recurringDays = [...recurringDays, day].sort();
+        }
+        updateTaskById(taskId, { recurringDays });
+      }
+      
+      debouncedSaveState();
+      render();
+    }
+
+    // Update monthly recurrence
+    function updateMonthlyRecurrence(taskId, value) {
+      updateTaskById(taskId, { recurringMonthly: value });
+      debouncedSaveState();
+      render();
+    }
+
+    // Update task text
+    function updateTaskText(taskId, newText, parentId = null) {
+      if (!newText.trim()) return;
+      
+      if (parentId) {
+        updateSubtaskById(parentId, taskId, { text: newText });
+      } else {
+        updateTaskById(taskId, { text: newText });
+      }
+      
+      state.editingTask = null;
+      debouncedSaveState();
+      render();
+    }
+
+    // Format due date as "18 December 2025"
+    function formatDueDate(dueDate) {
+      if (!dueDate) return '';
+      const date = new Date(dueDate);
+      const day = date.getDate();
+      const month = date.toLocaleDateString('en-GB', { month: 'long' });
+      const year = date.getFullYear();
+      return `${day} ${month} ${year}`;
+    }
+
+    // Format completion date - shows relative time for recent dates
+    function formatCompletionDate(dateString) {
+      if (!dateString) return '';
+      
+      const completionDate = new Date(dateString);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Reset time parts for accurate day comparison
+      completionDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      yesterday.setHours(0, 0, 0, 0);
+      
+      if (completionDate.getTime() === today.getTime()) {
+        return 'completed today';
+      } else if (completionDate.getTime() === yesterday.getTime()) {
+        return 'completed yesterday';
+      } else {
+        // For older dates, show full date
+        const day = new Date(dateString).getDate();
+        const month = new Date(dateString).toLocaleDateString('en-GB', { month: 'long' });
+        const year = new Date(dateString).getFullYear();
+        return `completed ${day} ${month} ${year}`;
+      }
+    }
+
+    // Calculate countdown
+    function calculateCountdown(dueDate) {
+      if (!dueDate || !state.showCountdown) return '';
+      
+      const now = new Date();
+      const due = new Date(dueDate);
+      const diffTime = due - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) return '(overdue)';
+      if (diffDays === 0) return '(today)';
+      if (diffDays === 1) return '(tomorrow)';
+      
+      // Calculate time units (using 30 days per month, 365 days per year)
+      const years = Math.floor(diffDays / 365);
+      let remainingDays = diffDays % 365;
+      
+      const months = Math.floor(remainingDays / 30);
+      remainingDays = remainingDays % 30;
+      
+      const weeks = Math.floor(remainingDays / 7);
+      remainingDays = remainingDays % 7;
+      
+      // Calculate work days
+      let workDaysCount = 0;
+      let currentDate = new Date(now);
+      while (currentDate <= due) {
+        const dayOfWeek = currentDate.getDay();
+        if (state.workDays.includes(dayOfWeek)) {
+          workDaysCount++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      // Build the display string
+      const parts = [];
+      
+      // Add years if any
+      if (years > 0) {
+        parts.push(`${years} year${years > 1 ? 's' : ''}`);
+      }
+      
+      // Add months if any
+      if (months > 0) {
+        parts.push(`${months} month${months > 1 ? 's' : ''}`);
+      }
+      
+      // Add weeks if any
+      if (weeks > 0) {
+        parts.push(`${weeks} week${weeks > 1 ? 's' : ''}`);
+      }
+      
+      // Add remaining days if any
+      if (remainingDays > 0) {
+        parts.push(`${remainingDays} day${remainingDays > 1 ? 's' : ''}`);
+      }
+      
+      // Always show work days
+      parts.push(`${workDaysCount} work day${workDaysCount !== 1 ? 's' : ''}`);
+      
+      return `(${parts.join(', ')})`;
+    }
+
+    // Calculate next occurrence date for recurring task
+    function getNextOccurrence(task) {
+      if (!task.recurring) return null;
+      
+      const today = new Date();
+      let nextDate = new Date(today);
+      nextDate.setHours(0, 0, 0, 0);
+      
+      // Start checking from tomorrow
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      // Check up to 365 days in the future
+      for (let i = 0; i < 365; i++) {
+        const dayOfWeek = nextDate.getDay();
+        const dayOfMonth = nextDate.getDate();
+        
+        let matches = false;
+        
+        if (task.recurring === 'daily') {
+          matches = (task.recurringDays || []).includes(dayOfWeek);
+        } else if (task.recurring === 'weekdays') {
+          matches = state.workDays.includes(dayOfWeek) && (task.recurringDays || []).includes(dayOfWeek);
+        } else if (task.recurring === 'weekends') {
+          matches = [0, 6].includes(dayOfWeek) && (task.recurringDays || [0, 6]).includes(dayOfWeek);
+        } else if (task.recurring === 'weekly') {
+          matches = (task.recurringDays || []).includes(dayOfWeek);
+        } else if (task.recurring === 'monthly') {
+          const monthlyValue = task.recurringMonthly;
+          if (monthlyValue) {
+            if (!isNaN(monthlyValue)) {
+              matches = dayOfMonth === parseInt(monthlyValue);
+            } else {
+              // Check description-based monthly recurrence
+              const lowerValue = monthlyValue.toLowerCase();
+              const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+              const todayName = dayNames[dayOfWeek];
+              
+              if (lowerValue.includes(todayName)) {
+                const firstDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth(), 1);
+                const lastDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0);
+                
+                let occurrenceCount = 0;
+                let currentOccurrence = 0;
+                
+                for (let d = 1; d <= lastDayOfMonth.getDate(); d++) {
+                  const checkDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), d);
+                  if (checkDate.getDay() === dayOfWeek) {
+                    occurrenceCount++;
+                    if (d === dayOfMonth) {
+                      currentOccurrence = occurrenceCount;
+                    }
+                  }
+                }
+                
+                if (lowerValue.includes('last')) {
+                  matches = currentOccurrence === occurrenceCount;
+                } else if (lowerValue.includes('1st') || lowerValue.includes('first')) {
+                  matches = currentOccurrence === 1;
+                } else if (lowerValue.includes('2nd') || lowerValue.includes('second')) {
+                  matches = currentOccurrence === 2;
+                } else if (lowerValue.includes('3rd') || lowerValue.includes('third')) {
+                  matches = currentOccurrence === 3;
+                } else if (lowerValue.includes('4th') || lowerValue.includes('fourth')) {
+                  matches = currentOccurrence === 4;
+                }
+              }
+            }
+          }
+        }
+        
+        if (matches) {
+          return nextDate;
+        }
+        
+        nextDate.setDate(nextDate.getDate() + 1);
+      }
+      
+      return null;
+    }
+
+    // Format recurrence description
+    function formatRecurrenceDescription(task) {
+      if (!task.recurring) return '';
+      
+      let desc = '';
+      
+      if (task.recurring === 'daily') {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const selectedDays = (task.recurringDays || []).map(i => days[i]);
+        desc = `Daily: ${selectedDays.join(', ')}`;
+      } else if (task.recurring === 'weekdays') {
+        desc = 'Weekdays';
+      } else if (task.recurring === 'weekends') {
+        desc = 'Weekends';
+      } else if (task.recurring === 'weekly') {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const selectedDays = (task.recurringDays || []).map(i => days[i]);
+        desc = `Weekly: ${selectedDays.join(', ')}`;
+      } else if (task.recurring === 'monthly') {
+        if (task.recurringMonthly) {
+          if (!isNaN(task.recurringMonthly)) {
+            desc = `Monthly: ${task.recurringMonthly}th`;
+          } else {
+            desc = `Monthly: ${task.recurringMonthly}`;
+          }
+        } else {
+          desc = 'Monthly';
+        }
+      }
+      
+      const nextDate = getNextOccurrence(task);
+      if (nextDate) {
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        desc += ` — Next: ${nextDate.toLocaleDateString('en-GB', options)}`;
+      }
+      
+      return desc;
+    }
+
+    // Check if task recurs today
+    function taskRecursToday(task) {
+      if (!task.recurring) return false;
+      
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const dayOfMonth = today.getDate();
+      
+      // Daily - check if today is in recurringDays
+      if (task.recurring === 'daily') {
+        return (task.recurringDays || []).includes(dayOfWeek);
+      }
+      
+      // Weekdays - check if today is a workday AND in recurringDays
+      if (task.recurring === 'weekdays') {
+        return state.workDays.includes(dayOfWeek) && (task.recurringDays || []).includes(dayOfWeek);
+      }
+      
+      // Weekends - check if today is Saturday or Sunday AND in recurringDays
+      if (task.recurring === 'weekends') {
+        return [0, 6].includes(dayOfWeek) && (task.recurringDays || [0, 6]).includes(dayOfWeek);
+      }
+      
+      // Weekly - check if today is in recurringDays
+      if (task.recurring === 'weekly') {
+        return (task.recurringDays || []).includes(dayOfWeek);
+      }
+      
+      // Monthly - check if today matches the specified day
+      if (task.recurring === 'monthly') {
+        const monthlyValue = task.recurringMonthly;
+        if (!monthlyValue) return false;
+        
+        // If it's a number, check if today is that day of month
+        if (!isNaN(monthlyValue)) {
+          return dayOfMonth === parseInt(monthlyValue);
+        }
+        
+        // If it's a description like "2nd Tuesday", check if today matches
+        // This is a simplified check - you could make it more sophisticated
+        const lowerValue = monthlyValue.toLowerCase();
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const todayName = dayNames[dayOfWeek];
+        
+        // Check if the description contains today's day name
+        if (!lowerValue.includes(todayName)) return false;
+        
+        // Calculate which occurrence of this weekday we are (1st, 2nd, 3rd, 4th, or last)
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        
+        let occurrenceCount = 0;
+        let currentOccurrence = 0;
+        
+        for (let d = 1; d <= lastDayOfMonth.getDate(); d++) {
+          const checkDate = new Date(today.getFullYear(), today.getMonth(), d);
+          if (checkDate.getDay() === dayOfWeek) {
+            occurrenceCount++;
+            if (d === dayOfMonth) {
+              currentOccurrence = occurrenceCount;
+            }
+          }
+        }
+        
+        // Check for "last"
+        if (lowerValue.includes('last')) {
+          return currentOccurrence === occurrenceCount;
+        }
+        
+        // Check for 1st, 2nd, 3rd, 4th
+        if (lowerValue.includes('1st') || lowerValue.includes('first')) {
+          return currentOccurrence === 1;
+        }
+        if (lowerValue.includes('2nd') || lowerValue.includes('second')) {
+          return currentOccurrence === 2;
+        }
+        if (lowerValue.includes('3rd') || lowerValue.includes('third')) {
+          return currentOccurrence === 3;
+        }
+        if (lowerValue.includes('4th') || lowerValue.includes('fourth')) {
+          return currentOccurrence === 4;
+        }
+        
+        // If no specific occurrence mentioned, assume any occurrence is ok
+        return true;
+      }
+      
+      return false;
+    }
+
+    // Check if task is in current view
+    function isTaskInView(task) {
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Notepad view
+      if (state.view === VIEWS.NOTEPAD) {
+        return checkListViewTask(task, VIEWS.NOTEPAD, today);
+      }
+
+      // Projects view
+      if (state.view === VIEWS.PROJECTS) {
+        return checkListViewTask(task, VIEWS.PROJECTS, today);
+      }
+
+      // Due By view
+      if (state.view === VIEWS.DUEBY) {
+        return task.dueDate && new Date(task.dueDate) > now;
+      }
+
+      // Recurring view
+      if (state.view === VIEWS.RECURRING) {
+        return task.recurring !== null;
+      }
+
+      // Custom lists
+      if (state.view.startsWith('custom-')) {
+        return checkListViewTask(task, state.view, today);
+      }
+
+      // Today view
+      if (state.view === VIEWS.TODAY) {
+        // Show tasks created in today with no due date (unless they're recurring)
+        if (task.createdIn === VIEWS.TODAY && !task.dueDate && !task.recurring) return true;
+        
+        // Show recurring tasks only if they recur today AND not paused AND not completed today
+        if (task.recurring && !task.recurringPaused && taskRecursToday(task)) {
+          const todayStr = today.toDateString();
+          if (task.completionHistory && task.completionHistory.includes(todayStr)) {
+            return false;
+          }
+          return true;
+        }
+        
+        // Show tasks with due dates based on their origin list's days ahead setting
+        if (task.dueDate) {
+          const dueDate = new Date(task.dueDate);
+          const daysAhead = getDaysAheadForList(task.createdIn || VIEWS.TODAY);
+          const daysFromNow = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+          if (dueDate >= now && dueDate <= daysFromNow) return true;
+        }
+        
+        // Show parent tasks if any subtask has a due date within its origin list's days ahead
+        if (task.subtasks && task.subtasks.length > 0) {
+          const hasSubtaskDueSoon = task.subtasks.some(subtask => {
+            if (subtask.dueDate) {
+              const subDueDate = new Date(subtask.dueDate);
+              // Use the parent task's origin list setting for subtasks
+              const daysAhead = getDaysAheadForList(task.createdIn || 'today');
+              const daysFromNow = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+              return subDueDate >= now && subDueDate <= daysFromNow;
+            }
+            return false;
+          });
+          if (hasSubtaskDueSoon) return true;
+        }
+        
+        return false;
+      }
+
+      return false;
+    }
+
+    // Check if recurring task was completed today
+    function isCompletedToday(task) {
+      if (!task.recurring || !task.completionHistory) return false;
+      const today = new Date().toDateString();
+      return task.completionHistory.includes(today);
+    }
+
+    // Get visible tasks separated by completion status
+    // Get next recurrence date for a task (for sorting)
+    function getNextRecurrenceDate(task) {
+      if (!task.recurring || task.recurringPaused) return new Date(8640000000000000); // Far future date
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Check if task recurs today
+      if (taskRecursToday(task)) {
+        return today;
+      }
+      
+      // Find next occurrence
+      if (task.recurring === 'daily') {
+        // Find next day that's in recurringDays
+        for (let i = 1; i <= 7; i++) {
+          const nextDate = new Date(today);
+          nextDate.setDate(today.getDate() + i);
+          if ((task.recurringDays || []).includes(nextDate.getDay())) {
+            return nextDate;
+          }
+        }
+      } else if (task.recurring === 'weekdays') {
+        // Find next weekday
+        for (let i = 1; i <= 7; i++) {
+          const nextDate = new Date(today);
+          nextDate.setDate(today.getDate() + i);
+          if (state.workDays.includes(nextDate.getDay())) {
+            return nextDate;
+          }
+        }
+      } else if (task.recurring === 'weekends') {
+        // Find next weekend day
+        for (let i = 1; i <= 7; i++) {
+          const nextDate = new Date(today);
+          nextDate.setDate(today.getDate() + i);
+          if (!state.workDays.includes(nextDate.getDay())) {
+            return nextDate;
+          }
+        }
+      } else if (task.recurring === 'weekly') {
+        // Find next occurrence of the selected days
+        for (let i = 1; i <= 14; i++) {
+          const nextDate = new Date(today);
+          nextDate.setDate(today.getDate() + i);
+          if ((task.recurringDays || []).includes(nextDate.getDay())) {
+            return nextDate;
+          }
+        }
+      } else if (task.recurring === 'monthly') {
+        // Simple approximation: next month same day
+        const nextDate = new Date(today);
+        nextDate.setMonth(today.getMonth() + 1);
+        return nextDate;
+      }
+      
+      return new Date(8640000000000000); // Far future if can't determine
+    }
+
+    function getVisibleTasks() {
+      let filtered = state.tasks.filter(isTaskInView);
+      
+      // Get sort preference for current view
+      let sortPref = state.viewSortPreferences[state.view];
+      
+      // Custom lists use their own sort preference if defined, otherwise use 'creation'
+      if (state.view.startsWith('custom-')) {
+        sortPref = state.viewSortPreferences[state.view] || 'creation';
+      }
+      
+      // Apply sorting based on view preference
+      if (sortPref === 'alphabetical') {
+        filtered.sort((a, b) => a.text.localeCompare(b.text));
+      } else if (sortPref === 'duedate') {
+        filtered.sort((a, b) => {
+          const aHasDate = a.dueDate && a.dueDate.trim() !== '';
+          const bHasDate = b.dueDate && b.dueDate.trim() !== '';
+          
+          // Priority order: 1. Due dates, 2. Recurring tasks, 3. No date
+          
+          // Both have dates - compare them
+          if (aHasDate && bHasDate) {
+            const dateA = new Date(a.dueDate);
+            const dateB = new Date(b.dueDate);
+            
+            // Handle invalid dates (treat as no date)
+            if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+            if (isNaN(dateA.getTime())) return 1;
+            if (isNaN(dateB.getTime())) return -1;
+            
+            return dateA - dateB;
+          }
+          
+          // A has date, B doesn't - A comes first
+          if (aHasDate && !bHasDate) return -1;
+          
+          // B has date, A doesn't - B comes first
+          if (!aHasDate && bHasDate) return 1;
+          
+          // Neither has date - check if recurring
+          // Recurring tasks come before non-recurring tasks
+          const aIsRecurring = a.recurring && !a.recurringPaused;
+          const bIsRecurring = b.recurring && !b.recurringPaused;
+          
+          if (aIsRecurring && !bIsRecurring) return -1;
+          if (!aIsRecurring && bIsRecurring) return 1;
+          
+          // Both same type (both recurring or both not) - keep original order
+          return 0;
+        });
+      } else if (sortPref === 'nextrecurrence') {
+        // Only for recurring view
+        filtered.sort((a, b) => {
+          const dateA = getNextRecurrenceDate(a);
+          const dateB = getNextRecurrenceDate(b);
+          return dateA - dateB;
+        });
+      }
+      // 'creation' order is default - no sorting needed as tasks are already in creation order
+      
+      // Apply reverse if enabled for this view
+      if (state.reverseSortOrder[state.view]) {
+        filtered.reverse();
+      }
+      
+      // Separate into incomplete and completed
+      const incomplete = filtered.filter(task => !task.completed);
+      const completed = filtered.filter(task => task.completed);
+      
+      // Add completion records for recurring tasks with all completion history
+      let recurringCompletions = [];
+      
+      if (state.view === 'today') {
+        // In Today view: show all historical completions for all recurring tasks
+        state.tasks.forEach(task => {
+          if (task.recurring && !task.recurringPaused && task.completionHistory && task.completionHistory.length > 0) {
+            // Create a completion record for each date in history
+            task.completionHistory.forEach(dateString => {
+              recurringCompletions.push({
+                ...task,
+                id: task.id + '-completion-' + dateString,
+                isCompletionRecord: true,
+                completed: true,
+                completionDate: dateString
+              });
+            });
+          }
+        });
+      } else if (state.view === 'notepad' || state.view === 'projects' || state.view.startsWith('custom-')) {
+        // In Notepad, Projects, or custom lists: show all historical completions for recurring tasks created in this view
+        state.tasks.forEach(task => {
+          if (task.recurring && 
+              !task.recurringPaused && 
+              task.completionHistory && 
+              task.completionHistory.length > 0 &&
+              task.createdIn === state.view) {
+            // Create a completion record for each date in history
+            task.completionHistory.forEach(dateString => {
+              recurringCompletions.push({
+                ...task,
+                id: task.id + '-completion-' + dateString,
+                isCompletionRecord: true,
+                completed: true,
+                completionDate: dateString
+              });
+            });
+          }
+        });
+      }
+      
+      // Combine all completed tasks and sort by completion date/time
+      const allCompleted = [...completed, ...recurringCompletions];
+      
+      allCompleted.sort((a, b) => {
+        // Get completion timestamp for each task
+        // For recurring completion records, use completionDate
+        // For regular tasks, use completedAt
+        const timeA = a.completionDate ? new Date(a.completionDate) : (a.completedAt ? new Date(a.completedAt) : new Date(0));
+        const timeB = b.completionDate ? new Date(b.completionDate) : (b.completedAt ? new Date(b.completedAt) : new Date(0));
+        
+        // Most recent first (descending order)
+        return timeB - timeA;
+      });
+      
+      return { 
+        incomplete, 
+        completed: allCompleted
+      };
+    }
+
+    // Toggle work day
+    function toggleWorkDay(day) {
+      if (state.workDays.includes(day)) {
+        state.workDays = state.workDays.filter(d => d !== day);
+      } else {
+        state.workDays = [...state.workDays, day].sort();
+      }
+      debouncedSaveState();
+      render();
+    }
+
+    // Render task item
+    function renderTask(task, isSubtask = false) {
+      // Simple display for completion records
+      if (task.isCompletionRecord) {
+        return `
+          <div>
+            <div class="task-item completed" style="position: relative;">
+              <input type="checkbox" checked disabled style="cursor: default;" />
+              <span class="task-text completed">${task.text} <span style="font-size: 12px; opacity: 0.7;">(${formatCompletionDate(task.completionDate)})</span></span>
+              <button 
+                onclick="undoRecurringCompletion(${typeof task.id === 'string' ? "'" + task.id + "'" : task.id})"
+                style="padding: 4px 8px; margin-left: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; background: var(--bg-button); color: var(--text-main); opacity: 0.7; transition: opacity 0.2s;"
+                onmouseover="this.style.opacity='1'"
+                onmouseout="this.style.opacity='0.7'"
+              >
+                ↶ Undo
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      
+      const hasSubtasks = !isSubtask && task.subtasks && task.subtasks.length > 0;
+      const incompleteSubtasks = hasSubtasks ? task.subtasks.filter(sub => !sub.completed) : [];
+      const completedSubtasks = hasSubtasks ? task.subtasks.filter(sub => sub.completed) : [];
+      const completedToday = task.recurring && isCompletedToday(task);
+      const isChecked = task.recurring && state.view === 'today' ? completedToday : task.completed;
+      
+      // Determine if task can be dragged
+      const canDrag = !isSubtask && 
+                      state.view !== 'recurring' && 
+                      state.view !== 'dueby' && 
+                      !task.recurring && 
+                      !task.dueDate;
+      
+      return `
+        <div>
+          <div 
+            class="task-item ${isChecked ? 'completed' : ''} ${isSubtask ? 'subtask' : ''}"
+            data-task-id="${task.id}"
+            ${canDrag ? `draggable="true" ondragstart="startDrag(${task.id}, event)" ondragend="endDrag()"` : ''}
+            style="${canDrag ? 'cursor: move;' : ''}"
+          >
+            <input 
+              type="checkbox" 
+              ${isChecked ? 'checked' : ''} 
+              onchange="toggleTask(${task.id}, ${task.parentId || null}); this.blur(); return false;"
+              style="pointer-events: auto;"
+            />
+            
+            ${hasSubtasks ? `
+              <button class="expand-btn" onclick="toggleExpanded(${task.id})" style="pointer-events: auto;">
+                ${task.expanded ? '∨' : '>'}
+              </button>
+            ` : ''}
+            
+            <span class="task-text ${isChecked ? 'completed' : ''}">
+              ${state.editingTask === task.id ? `
+                <input 
+                  type="text" 
+                  id="edit-input-${task.id}"
+                  value="${task.text}" 
+                  style="background: var(--bg-secondary); color: var(--text-main); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 16px; width: 100%;"
+                  onkeypress="if(event.key === 'Enter') { updateTaskText(${task.id}, this.value, ${task.parentId || null}); }"
+                  onblur="updateTaskText(${task.id}, this.value, ${task.parentId || null})"
+                />
+              ` : `
+                ${task.text}
+                ${task.completed && task.completedAt && !task.recurring ? `<span style="font-size: 12px; opacity: 0.7; margin-left: 8px;">(${formatCompletionDate(task.completedAt)})</span>` : ''}
+                ${task.dueDate ? `<span class="countdown">${calculateCountdown(task.dueDate)}${state.view === 'dueby' && state.showDueDate ? ` <span style="font-size: 11px; opacity: 0.5;">${formatDueDate(task.dueDate)}</span>` : ''}</span>` : ''}
+                ${task.recurring && (state.view === 'today' || state.view === 'notepad' || state.view === 'projects' || state.view.startsWith('custom-')) && taskRecursToday(task) ? `
+                  <span style="font-size: 11px; opacity: 0.6; margin-left: 8px; padding: 2px 6px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: var(--text-blue);">
+                    🔁 Recurring task due today
+                  </span>
+                ` : ''}
+                ${task.recurring && state.view === 'recurring' ? `<br><span style="font-size: 12px; opacity: 0.7;">${formatRecurrenceDescription(task)}</span>` : ''}
+                ${task.recurringPaused && state.view === 'recurring' ? `
+                  <br>
+                  <span style="font-size: 11px; color: #dc2626;">⚠️ Paused - No future occurrences</span>
+                  <button 
+                    onclick="restoreRecurringTask(${task.id})"
+                    style="padding: 3px 8px; margin-left: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; background: #16a34a; color: white; transition: opacity 0.2s;"
+                    onmouseover="this.style.opacity='0.8'"
+                    onmouseout="this.style.opacity='1'"
+                  >
+                    ↶ Restore
+                  </button>
+                ` : ''}
+              `}
+            </span>
+            
+            <div class="task-actions">
+              <button class="icon-btn" onclick="state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; render()">
+                📅
+              </button>
+              ${!isSubtask ? `
+                <button class="icon-btn" onclick="state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; render()">
+                  🔁
+                </button>
+                <button class="icon-btn" onclick="addTask(prompt('Add subtask:'), ${task.id})">
+                  ➕
+                </button>
+              ` : ''}
+              <button class="icon-btn" onclick="state.editingTask = ${task.id}; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0)">
+                ✏️
+              </button>
+              <button class="icon-btn" onclick="duplicateTask(${task.id}, ${task.parentId || null})" title="Duplicate task">
+                📋
+              </button>
+              <button class="icon-btn delete" onclick="deleteTask(${task.id}, ${task.parentId || null})">
+                🗑️
+              </button>
+            </div>
+          </div>
+          
+          ${state.expandedDueDate === task.id ? `
+            <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main)">
+              <label>Due Date</label>
+              <input 
+                type="date" 
+                value="${task.dueDate || ''}" 
+                onchange="updateTaskDate(${task.id}, this.value, ${task.parentId || null})"
+              />
+            </div>
+          ` : ''}
+          
+          ${state.expandedRecurring === task.id && !isSubtask ? `
+            <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main)">
+              <label>Recurring</label>
+              <select onchange="updateTaskRecurring(${task.id}, this.value || null)" style="margin-bottom: 12px;">
+                <option value="" ${!task.recurring ? 'selected' : ''}>None</option>
+                <option value="daily" ${task.recurring === 'daily' ? 'selected' : ''}>Daily</option>
+                <option value="weekdays" ${task.recurring === 'weekdays' ? 'selected' : ''}>Weekdays</option>
+                <option value="weekends" ${task.recurring === 'weekends' ? 'selected' : ''}>Weekends</option>
+                <option value="weekly" ${task.recurring === 'weekly' ? 'selected' : ''}>Weekly</option>
+                <option value="monthly" ${task.recurring === 'monthly' ? 'selected' : ''}>Monthly</option>
+              </select>
+              
+              ${task.recurring === 'daily' ? `
+                <label style="margin-top: 8px;">Recurs on:</label>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => `
+                    <button 
+                      onclick="toggleRecurringDay(${task.id}, ${i})"
+                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                    >
+                      ${day}
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
+              
+              ${task.recurring === 'weekdays' ? `
+                <label style="margin-top: 8px;">Work days:</label>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
+                    if (!state.workDays.includes(i)) return '';
+                    return `
+                      <button 
+                        onclick="toggleRecurringDay(${task.id}, ${i})"
+                        style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                      >
+                        ${day}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
+              
+              ${task.recurring === 'weekly' ? `
+                <label style="margin-top: 8px;">Recurs on:</label>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => `
+                    <button 
+                      onclick="toggleRecurringDay(${task.id}, ${i})"
+                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                    >
+                      ${day}
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
+              
+              ${task.recurring === 'monthly' ? `
+                <label style="margin-top: 8px;">Day of month:</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="31" 
+                  value="${task.recurringMonthly || ''}" 
+                  placeholder="e.g., 15"
+                  onchange="updateMonthlyRecurrence(${task.id}, this.value)"
+                  style="width: 100%; margin-top: 4px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main); font-size: 14px;"
+                />
+                <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">
+                  Or describe (e.g., "2nd Tuesday" or "Last Friday"):
+                </div>
+                <input 
+                  type="text" 
+                  value="${isNaN(task.recurringMonthly) ? task.recurringMonthly || '' : ''}" 
+                  placeholder="e.g., 2nd Tuesday"
+                  onchange="updateMonthlyRecurrence(${task.id}, this.value)"
+                  style="width: 100%; margin-top: 4px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main); font-size: 14px;"
+                />
+              ` : ''}
+            </div>
+          ` : ''}
+          
+          ${task.expanded && hasSubtasks ? `
+            <div style="margin-left: 40px;">
+              ${incompleteSubtasks.map(sub => renderTask(sub, true)).join('')}
+              ${completedSubtasks.length > 0 ? `
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid ${state.darkMode === 'dark' ? '#404040' : '#d0d0d0'}; opacity: 0.7;">
+                  <div style="font-size: 12px; margin-bottom: 8px;">Completed subtasks (${completedSubtasks.length})</div>
+                  ${completedSubtasks.map(sub => renderTask(sub, true)).join('')}
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // Render grouped tasks (for Today, Recurring, Due By views)
+    function renderGroupedTasks(tasks, isCompleted = false) {
+      const groups = {};
+      
+      tasks.forEach(task => {
+        const groupKey = task.createdIn || 'today';
+        if (!groups[groupKey]) {
+          groups[groupKey] = [];
+        }
+        groups[groupKey].push(task);
+      });
+      
+      // Sort group keys in consistent order
+      const sortedGroupKeys = sortGroupKeys(Object.keys(groups));
+      
+      // Render each group
+      return sortedGroupKeys.map(groupKey => {
+        const groupName = getGroupName(groupKey);
+        const groupTasks = groups[groupKey];
+        const expandedKey = isCompleted ? groupKey + '-completed' : groupKey;
+        const isExpanded = state.expandedGroups[expandedKey] !== false;
+        
+        // Different styling for completed vs incomplete groups
+        const fontSize = isCompleted ? '13px' : '14px';
+        const padding = isCompleted ? '6px 12px' : '6px 12px';
+        const marginBottom = isCompleted ? '8px' : '12px';
+        const gap = isCompleted ? '4px' : '4px';
+        const expandedOpacity = isCompleted ? '0.6' : '0.8';
+        const collapsedOpacity = isCompleted ? '0.25' : '0.3';
+        
+        return `
+          <div style="margin-bottom: ${marginBottom};">
+            <div 
+              data-group="${expandedKey}"
+              onclick="toggleGroup('${expandedKey}')"
+              style="display: flex; align-items: center; gap: 8px; padding: ${padding}; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: ${fontSize}; font-weight: ${isExpanded ? '500' : '400'}; opacity: ${isExpanded ? expandedOpacity : collapsedOpacity}; margin-bottom: ${isCompleted ? '4px' : '6px'}; color: ${isExpanded ? 'inherit' : '#888888'}; pointer-events: auto;"
+              onmouseover="this.style.opacity='0.8'"
+              onmouseout="this.style.opacity='${isExpanded ? expandedOpacity : collapsedOpacity}'"
+            >
+              <span>${isExpanded ? '▼' : '▶'}</span>
+              <span>${groupName} (${groupTasks.length})</span>
+            </div>
+            ${isExpanded ? `
+              <div style="display: flex; flex-direction: column; gap: ${gap};">
+                ${groupTasks.map(task => renderTask(task)).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Helper function to check if current view should group tasks
+    function shouldGroupTasks() {
+      return ['recurring', 'dueby', 'today'].includes(state.view);
+    }
+
+    // Sort group keys in consistent order: Today, Notepad, then custom lists alphabetically
+    function sortGroupKeys(groupKeys) {
+      return groupKeys.sort((a, b) => {
+        // 'today' always first
+        if (a === 'today') return -1;
+        if (b === 'today') return 1;
+        
+        // 'notepad' always second
+        if (a === 'notepad') return -1;
+        if (b === 'notepad') return 1;
+        
+        // 'projects' always third
+        if (a === 'projects') return -1;
+        if (b === 'projects') return 1;
+        
+        // Custom lists sorted alphabetically by name
+        const nameA = getGroupName(a);
+        const nameB = getGroupName(b);
+        return nameA.localeCompare(nameB);
+      });
+    }
+
+    // Efficiently update a single task by ID
+    function updateTaskById(taskId, updates) {
+      const index = state.tasks.findIndex(t => t.id === taskId);
+      if (index !== -1) {
+        state.tasks[index] = { ...state.tasks[index], ...updates };
+      }
+    }
+
+    // Efficiently update a subtask
+    function updateSubtaskById(parentId, subtaskId, updates) {
+      const parentIndex = state.tasks.findIndex(t => t.id === parentId);
+      if (parentIndex !== -1) {
+        const subtaskIndex = state.tasks[parentIndex].subtasks.findIndex(s => s.id === subtaskId);
+        if (subtaskIndex !== -1) {
+          state.tasks[parentIndex].subtasks[subtaskIndex] = {
+            ...state.tasks[parentIndex].subtasks[subtaskIndex],
+            ...updates
+          };
+        }
+      }
+    }
+
+    // Main render function
+    function render() {
+      // Sync task map before rendering
+      syncTaskMap();
+      
+      // Save scroll position before render (using element-based tracking)
+      saveScrollPosition();
+      
+      const settingsModal = document.querySelector('.modal');
+      const savedModalScroll = settingsModal ? settingsModal.scrollTop : 0;
+      
+      // Apply CSS custom properties
+      document.documentElement.style.setProperty('--sidebar-width', `${state.sidebarWidth}px`);
+      
+      // Set theme color variables
+      const isDark = state.darkMode === 'dark';
+      document.documentElement.style.setProperty('--bg-main', isDark ? '#1a1a1a' : '#ffffff'); // White main in light mode
+      document.documentElement.style.setProperty('--bg-secondary', isDark ? '#2d2d2d' : '#f5f5f5'); // Gray sidebar in light mode
+      document.documentElement.style.setProperty('--bg-hover', isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)');
+      document.documentElement.style.setProperty('--text-main', isDark ? 'white' : '#1a1a1a');
+      document.documentElement.style.setProperty('--border-color', isDark ? '#404040' : '#d0d0d0');
+      document.documentElement.style.setProperty('--bg-button', isDark ? '#404040' : '#e0e0e0');
+      document.documentElement.style.setProperty('--bg-button-inactive', isDark ? '#1a1a1a' : '#f5f5f5');
+      document.documentElement.style.setProperty('--bg-input', isDark ? '#1a1a1a' : '#ffffff');
+      document.documentElement.style.setProperty('--text-blue', isDark ? '#93c5fd' : '#1e40af');
+      document.documentElement.style.setProperty('--bg-delete', isDark ? '#dc2626' : '#ef4444');
+      document.documentElement.style.setProperty('--bg-workday', isDark ? '#404040' : '#d0d0d0');
+      document.documentElement.style.setProperty('--bg-non-workday', isDark ? '#2d2d2d' : '#f5f5f5');
+      
+      const app = document.getElementById('app');
+      const { incomplete, completed } = getVisibleTasks();
+      
+      app.innerHTML = `
+        <div class="app ${state.darkMode}-mode">
+          ${!state.showSettings ? `<div class="click-layer" onclick="toggleMenu()"></div>` : ''}
+          
+          <div class="sidebar ${state.showMenu ? '' : 'hidden'}">
+            <h1>Tasks</h1>
+            
+            <nav style="flex: 1">
+              <button 
+                class="nav-btn ${state.view === 'today' ? 'active' : ''}" 
+                onclick="state.view = 'today'; state.domInitialized = false; render()"
+                ondragover="allowDrop('today', event)"
+                ondrop="dropTask('today', event)"
+                ondragenter="this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+              >
+                Today
+              </button>
+              <button 
+                class="nav-btn ${state.view === 'dueby' ? 'active' : ''}" 
+                onclick="state.view = 'dueby'; state.domInitialized = false; render()"
+                ${state.view !== 'dueby' ? 'style="opacity: 0.5;"' : ''}
+                title="Cannot drag tasks to Due By"
+              >
+                Due By
+              </button>
+              <button 
+                class="nav-btn ${state.view === 'recurring' ? 'active' : ''}" 
+                onclick="state.view = 'recurring'; state.domInitialized = false; render()"
+                ${state.view !== 'recurring' ? 'style="opacity: 0.5;"' : ''}
+                title="Cannot drag tasks to Recurring"
+              >
+                Recurring
+              </button>
+              <button 
+                class="nav-btn ${state.view === 'notepad' ? 'active' : ''}" 
+                onclick="state.view = 'notepad'; state.domInitialized = false; render()"
+                ondragover="allowDrop('notepad', event)"
+                ondrop="dropTask('notepad', event)"
+                ondragenter="this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+              >
+                Notepad
+              </button>
+              <button 
+                class="nav-btn ${state.view === 'projects' ? 'active' : ''}" 
+                onclick="state.view = 'projects'; state.domInitialized = false; render()"
+                ondragover="allowDrop('projects', event)"
+                ondrop="dropTask('projects', event)"
+                ondragenter="this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+              >
+                Projects
+              </button>
+              
+              ${state.customLists.map(list => `
+                <button 
+                  class="nav-btn ${state.view === list.id ? 'active' : ''}" 
+                  onclick="state.view = '${list.id}'; state.domInitialized = false; render()"
+                  ondragover="allowDrop('${list.id}', event)"
+                  ondrop="dropTask('${list.id}', event)"
+                  ondragenter="this.classList.add('drag-over')"
+                  ondragleave="this.classList.remove('drag-over')"
+                  title="${list.name}"
+                >
+                  ${list.name}
+                </button>
+              `).join('')}
+              
+              <button 
+                class="nav-btn add-list-btn" 
+                onclick="addCustomList()"
+              >
+                ➕ New List
+              </button>
+            </nav>
+            
+            <button class="nav-btn settings-btn" onclick="state.showSettings = true; render()">
+              ⚙️ Settings
+            </button>
+            
+            <div 
+              class="sidebar-resize-handle" 
+              onmousedown="startResize(event)"
+              title="Drag to resize sidebar"
+            ></div>
+          </div>
+          
+          <div class="main-content" onclick="if(event.target === this || event.target.classList.contains('main-inner')) { toggleMenu(); }">
+            <div class="main-inner">
+              <div class="add-task-form ${state.showMenu && state.view !== 'recurring' && state.view !== 'dueby' ? '' : 'hidden'}">
+                <input 
+                  type="text" 
+                  id="new-task-input" 
+                  placeholder="Add a task..."
+                  onkeypress="if(event.key === 'Enter') { addTask(this.value); this.value = ''; }"
+                />
+                <button class="btn" onclick="const input = document.getElementById('new-task-input'); addTask(input.value); input.value = '';">
+                  ➕
+                </button>
+              </div>
+              
+              <div class="task-list">
+                ${shouldGroupTasks() ? renderGroupedTasks(incomplete, false) : incomplete.map(task => renderTask(task)).join('')}
+              </div>
+              
+              ${completed.length > 0 ? `
+                <div class="completed-section ${state.showMenu ? '' : 'hidden'}">
+                  <div class="completed-header ${state.showCompleted ? 'expanded' : ''}" onclick="state.showCompleted = !state.showCompleted; render()">
+                    <span>${state.showCompleted ? '▼' : '▶'}</span>
+                    <span>Completed (${completed.length})</span>
+                  </div>
+                  <div class="completed-tasks ${state.showCompleted ? '' : 'hidden'}">
+                    ${shouldGroupTasks() ? renderGroupedTasks(completed, true) : completed.map(task => renderTask(task)).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <div class="modal-bg ${state.showSettings ? '' : 'hidden'}" onclick="if(event.target === event.currentTarget) { state.showSettings = false; render(); }">
+            <div class="modal">
+              <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-btn" onclick="state.showSettings = false; render()">×</button>
+              </div>
+              
+              <div class="settings-section">
+                <label>Theme</label>
+                <div class="button-group">
+                  <button class="btn" onclick="state.darkMode = 'light'; debouncedSaveState(); render()">Light Mode</button>
+                  <button class="btn" onclick="state.darkMode = 'dark'; debouncedSaveState(); render()">Dark Mode</button>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <label>Task Sorting</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Choose how to sort tasks in each view</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Today:</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <select 
+                        onchange="updateViewSort('today', this.value)"
+                        style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      >
+                        <option value="creation" ${(state.viewSortPreferences.today || 'creation') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                        <option value="alphabetical" ${state.viewSortPreferences.today === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                        <option value="duedate" ${state.viewSortPreferences.today === 'duedate' ? 'selected' : ''}>By Due Date</option>
+                      </select>
+                      <button 
+                        onclick="toggleReverseSortOrder('today')"
+                        style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder.today ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder.today ? '1' : '0.4'}; transition: all 0.2s;"
+                        title="${state.reverseSortOrder.today ? 'Reverse order active' : 'Click to reverse order'}"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Notepad:</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <select 
+                        onchange="updateViewSort('notepad', this.value)"
+                        style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      >
+                        <option value="creation" ${(state.viewSortPreferences.notepad || 'creation') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                        <option value="alphabetical" ${state.viewSortPreferences.notepad === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                        <option value="duedate" ${state.viewSortPreferences.notepad === 'duedate' ? 'selected' : ''}>By Due Date</option>
+                      </select>
+                      <button 
+                        onclick="toggleReverseSortOrder('notepad')"
+                        style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder.notepad ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder.notepad ? '1' : '0.4'}; transition: all 0.2s;"
+                        title="${state.reverseSortOrder.notepad ? 'Reverse order active' : 'Click to reverse order'}"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Projects:</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <select 
+                        onchange="updateViewSort('projects', this.value)"
+                        style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      >
+                        <option value="creation" ${(state.viewSortPreferences.projects || 'creation') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                        <option value="alphabetical" ${state.viewSortPreferences.projects === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                        <option value="duedate" ${state.viewSortPreferences.projects === 'duedate' ? 'selected' : ''}>By Due Date</option>
+                      </select>
+                      <button 
+                        onclick="toggleReverseSortOrder('projects')"
+                        style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder.projects ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder.projects ? '1' : '0.4'}; transition: all 0.2s;"
+                        title="${state.reverseSortOrder.projects ? 'Reverse order active' : 'Click to reverse order'}"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Due By:</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <select 
+                        onchange="updateViewSort('dueby', this.value)"
+                        style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      >
+                        <option value="creation" ${(state.viewSortPreferences.dueby || 'duedate') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                        <option value="alphabetical" ${state.viewSortPreferences.dueby === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                        <option value="duedate" ${(state.viewSortPreferences.dueby || 'duedate') === 'duedate' ? 'selected' : ''}>By Due Date</option>
+                      </select>
+                      <button 
+                        onclick="toggleReverseSortOrder('dueby')"
+                        style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder.dueby ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder.dueby ? '1' : '0.4'}; transition: all 0.2s;"
+                        title="${state.reverseSortOrder.dueby ? 'Reverse order active' : 'Click to reverse order'}"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Recurring:</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <select 
+                        onchange="updateViewSort('recurring', this.value)"
+                        style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      >
+                        <option value="creation" ${(state.viewSortPreferences.recurring || 'creation') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                        <option value="alphabetical" ${state.viewSortPreferences.recurring === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                        <option value="nextrecurrence" ${state.viewSortPreferences.recurring === 'nextrecurrence' ? 'selected' : ''}>Next Recurrence</option>
+                      </select>
+                      <button 
+                        onclick="toggleReverseSortOrder('recurring')"
+                        style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder.recurring ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder.recurring ? '1' : '0.4'}; transition: all 0.2s;"
+                        title="${state.reverseSortOrder.recurring ? 'Reverse order active' : 'Click to reverse order'}"
+                      >
+                        🔄
+                      </button>
+                    </div>
+                  </div>
+                  
+                  ${state.customLists.map(list => `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                      <span>${list.name}:</span>
+                      <div style="display: flex; gap: 8px; align-items: center;">
+                        <select 
+                          onchange="updateViewSort('${list.id}', this.value)"
+                          style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                        >
+                          <option value="creation" ${(state.viewSortPreferences[list.id] || 'creation') === 'creation' ? 'selected' : ''}>Creation Order</option>
+                          <option value="alphabetical" ${state.viewSortPreferences[list.id] === 'alphabetical' ? 'selected' : ''}>Alphabetical (A-Z)</option>
+                          <option value="duedate" ${state.viewSortPreferences[list.id] === 'duedate' ? 'selected' : ''}>By Due Date</option>
+                        </select>
+                        <button 
+                          onclick="toggleReverseSortOrder('${list.id}')"
+                          style="padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; background: ${state.reverseSortOrder[list.id] ? 'var(--bg-button)' : 'transparent'}; opacity: ${state.reverseSortOrder[list.id] ? '1' : '0.4'}; transition: all 0.2s;"
+                          title="${state.reverseSortOrder[list.id] ? 'Reverse order active' : 'Click to reverse order'}"
+                        >
+                          🔄
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    ${state.showCountdown ? 'checked' : ''} 
+                    onchange="state.showCountdown = this.checked; debouncedSaveState(); render()"
+                  />
+                  Show deadline countdown
+                </label>
+              </div>
+              
+              <div class="settings-section">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    ${state.showDueDate ? 'checked' : ''} 
+                    onchange="state.showDueDate = this.checked; debouncedSaveState(); render()"
+                  />
+                  Show due date in Due By view
+                </label>
+              </div>
+              
+              <div class="settings-section">
+                <label>Work Days</label>
+                <div class="work-days">
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => `
+                    <button 
+                      class="day-btn" 
+                      style="background: ${state.workDays.includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#2d2d2d' : '#f5f5f5')}; color: var(--text-main)"
+                      onclick="toggleWorkDay(${i})"
+                    >
+                      ${day}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <label>Manage Custom Lists</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Delete custom lists (tasks will move to Today)</div>
+                
+                ${state.customLists.length > 0 ? `
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    ${state.customLists.map(list => `
+                      <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background: ${state.darkMode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'};">
+                        <span style="font-size: 14px;">${list.name}</span>
+                        <button 
+                          onclick="if(confirm('Delete ${list.name}? Tasks will move to Today.')) deleteCustomList('${list.id}')"
+                          style="padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${state.darkMode === 'dark' ? '#dc2626' : '#ef4444'}; color: white; transition: opacity 0.2s;"
+                          onmouseover="this.style.opacity='0.8'"
+                          onmouseout="this.style.opacity='1'"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : `
+                  <div style="font-size: 13px; opacity: 0.5; font-style: italic;">No custom lists yet. Create one using the "+ New List" button.</div>
+                `}
+              </div>
+              
+              <div class="settings-section">
+                <label>Days Ahead in Today View</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Configure how many days ahead tasks from each list appear in Today</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>Today:</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="365" 
+                      value="${getDaysAheadForList('today')}"
+                      onchange="updateListDaysAhead('today', this.value)"
+                      style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                    />
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>Notepad:</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="365" 
+                      value="${getDaysAheadForList('notepad')}"
+                      onchange="updateListDaysAhead('notepad', this.value)"
+                      style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                    />
+                  </div>
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>Projects:</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="365" 
+                      value="${getDaysAheadForList('projects')}"
+                      onchange="updateListDaysAhead('projects', this.value)"
+                      style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                    />
+                  </div>
+                  
+                  ${state.customLists.map(list => `
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <span>${list.name}:</span>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="365" 
+                        value="${getDaysAheadForList(list.id)}"
+                        onchange="updateListDaysAhead('${list.id}', this.value)"
+                        style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main); font-size: 14px;"
+                      />
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              
+              ${!isInstalled && deferredPrompt ? `
+                <div class="settings-section">
+                  <label>Install App</label>
+                  <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">
+                    Install this app on your device for quick access
+                  </div>
+                  
+                  <button class="btn" onclick="installPWA()" style="width: 100%;">
+                    📱 Install on This Device
+                  </button>
+                  
+                  <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
+                    ✓ Works offline<br>
+                    ✓ Fast access from home screen<br>
+                    ✓ Feels like a native app
+                  </div>
+                </div>
+              ` : ''}
+              
+              
+              <div class="settings-section">
+                <label>Google Drive Sync</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">
+                  Automatically sync your tasks across all devices
+                </div>
+                
+                ${!googleUser ? `
+                  <button class="btn" onclick="signInToGoogle()" style="width: 100%; padding: 12px; font-size: 15px;">
+                    <span style="font-size: 18px; margin-right: 8px;">📱</span>
+                    Sign in with Google
+                  </button>
+                  <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
+                    Your data will be stored in your Google Drive and synced automatically every 5 minutes.
+                  </div>
+                ` : `
+                  <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                      ${googleUser.picture ? `
+                        <img 
+                          src="${googleUser.picture}" 
+                          alt="Profile"
+                          style="width: 40px; height: 40px; border-radius: 50%;" 
+                          onerror="console.error('❌ Failed to load profile picture:', this.src); this.style.display='none';"
+                        />
+                      ` : `
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: #4285f4; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">
+                          ${googleUser.name ? googleUser.name.charAt(0).toUpperCase() : '?'}
+                        </div>
+                      `}
+                      <div style="flex: 1;">
+                        <div style="font-weight: 500;">${googleUser.name}</div>
+                        <div style="font-size: 12px; opacity: 0.7;">${googleUser.email}</div>
+                      </div>
+                    </div>
+                    
+                    ${lastSyncTime ? `
+                      <div style="font-size: 12px; opacity: 0.7; margin-bottom: 8px;">
+                        ${isSyncing ? '⏳ Syncing...' : '✅ Last synced: ' + lastSyncTime.toLocaleTimeString()}
+                      </div>
+                    ` : ''}
+                    
+                    <div style="display: flex; gap: 8px;">
+                      <button class="btn" onclick="syncWithDrive()" ${isSyncing ? 'disabled' : ''} style="flex: 1;">
+                        🔄 Sync Now
+                      </button>
+                      <button class="btn" onclick="signOutFromGoogle()" style="flex: 1;">
+                        🚪 Sign Out
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="font-size: 11px; opacity: 0.6; line-height: 1.4;">
+                    Auto-sync: Every 5 minutes • Manual sync: Click "Sync Now" • Data stored in: Google Drive/todo-app-data.json
+                  </div>
+                `}
+              </div>
+              
+              <div class="settings-section">
+                <label>Manual Backup</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Export/import your data manually</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="btn" onclick="exportToFile()" style="flex: 1; min-width: 140px;">
+                    💾 Export Backup
+                  </button>
+                  <label class="btn" style="flex: 1; min-width: 140px; cursor: pointer; text-align: center;">
+                    📂 Import Backup
+                    <input type="file" accept=".json" onchange="importFromFile(this.files[0]); this.value='';" style="display: none;">
+                  </label>
+                </div>
+                <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
+                  For manual backups or transferring data without Google Drive sync.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Restore scroll positions after render
+      // Only restore if we have a scroll anchor (meaning we actually scrolled before render)
+      if (scrollAnchorId) {
+        restoreScrollPosition();
+      }
+      
+      // Restore settings modal scroll
+      const newSettingsModal = document.querySelector('.modal');
+      if (newSettingsModal && savedModalScroll > 0) {
+        newSettingsModal.scrollTop = savedModalScroll;
+      }
+      
+      // Mark DOM as initialized after first render
+      if (!state.domInitialized) {
+        state.domInitialized = true;
+      }
+    }
+
+    // ===== GOOGLE DRIVE API INTEGRATION =====
+    
+    // Google Drive Configuration
+    const GOOGLE_CONFIG = {
+      CLIENT_ID: '390088944078-ps6naavlout4qm5dcj9ggnbthgf8jm83.apps.googleusercontent.com',
+      SCOPES: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+      FILE_NAME: 'todo-app-data.json'
+    };
+    
+    // Google Drive State
+    let googleUser = null;
+    let googleAccessToken = null;
+    let autoSyncInterval = null;
+    let isSyncing = false;
+    let lastSyncTime = null;
+    
+    // Initialize Google API (simplified - using REST API directly)
+    function initGoogleAPI() {
+      console.log('✅ Using Google Drive REST API directly (no gapi.client needed)');
+      return Promise.resolve();
+    }
+    
+    // Sign in to Google
+    function signInToGoogle() {
+      // Validate credentials are configured
+      if (GOOGLE_CONFIG.CLIENT_ID === 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com') {
+        alert('⚠️ Google Drive is not configured yet!\n\n' +
+              'You need to:\n' +
+              '1. Set up Google Cloud project\n' +
+              '2. Get your CLIENT_ID\n' +
+              '3. Replace the placeholder in the HTML file\n\n' +
+              'See setup instructions.');
+        return;
+      }
+      
+      if (typeof google === 'undefined') {
+        alert('Google API not loaded. Please refresh the page and try again.');
+        return;
+      }
+      
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CONFIG.CLIENT_ID,
+        scope: GOOGLE_CONFIG.SCOPES,
+        callback: async (tokenResponse) => {
+          googleAccessToken = tokenResponse.access_token;
+          
+          // Get user info using fetch (not gapi.client to avoid API key issues)
+          try {
+            const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: {
+                'Authorization': `Bearer ${googleAccessToken}`
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const userInfo = await response.json();
+            
+            console.log('📸 User info received:', userInfo);
+            console.log('📸 Picture URL:', userInfo.picture);
+            
+            googleUser = {
+              email: userInfo.email,
+              name: userInfo.name || userInfo.email,
+              picture: userInfo.picture
+            };
+            
+            console.log('📸 GoogleUser object:', googleUser);
+            
+            await loadFromDrive();
+            startAutoSync();
+            render();
+            
+            console.log('Signed in as:', googleUser.email);
+          } catch (error) {
+            console.error('Error getting user info:', error);
+            alert('Error signing in. Please try again.');
+          }
+        }
+      });
+      
+      client.requestAccessToken();
+    }
+    
+    // Sign out from Google
+    function signOutFromGoogle() {
+      if (googleAccessToken) {
+        google.accounts.oauth2.revoke(googleAccessToken, () => {
+          console.log('Access token revoked');
+        });
+      }
+      
+      googleUser = null;
+      googleAccessToken = null;
+      lastSyncTime = null;
+      stopAutoSync();
+      
+      render();
+    }
+    
+    // Find existing file in Drive (REST API)
+    async function findDriveFile() {
+      if (!googleAccessToken) return null;
+      
+      try {
+        const query = encodeURIComponent(`name='${GOOGLE_CONFIG.FILE_NAME}' and trashed=false`);
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&spaces=drive`,
+          {
+            headers: {
+              'Authorization': `Bearer ${googleAccessToken}`
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.files && data.files.length > 0 ? data.files[0] : null;
+      } catch (error) {
+        console.error('Error finding file:', error);
+        return null;
+      }
+    }
+    
+    // Save to Google Drive
+    async function saveToDrive() {
+      if (!googleUser || isSyncing) return;
+      
+      isSyncing = true;
+      
+      try {
+        const data = {
+          tasks: state.tasks,
+          settings: {
+            darkMode: state.darkMode,
+            showCountdown: state.showCountdown,
+            showDueDate: state.showDueDate,
+            sidebarWidth: state.sidebarWidth,
+            viewSortPreferences: state.viewSortPreferences,
+            reverseSortOrder: state.reverseSortOrder,
+            workDays: state.workDays,
+            customLists: state.customLists,
+            listDaysAhead: state.listDaysAhead
+          },
+          expandedGroups: state.expandedGroups,
+          lastModified: new Date().toISOString(),
+          version: '1.0'
+        };
+        
+        const existingFile = await findDriveFile();
+        const fileContent = JSON.stringify(data);
+        const file = new Blob([fileContent], { type: 'application/json' });
+        
+        const metadata = {
+          name: GOOGLE_CONFIG.FILE_NAME,
+          mimeType: 'application/json'
+        };
+        
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+        
+        let response;
+        if (existingFile) {
+          // Update existing file
+          response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${googleAccessToken}`
+            },
+            body: form
+          });
+        } else {
+          // Create new file
+          response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${googleAccessToken}`
+            },
+            body: form
+          });
+        }
+        
+        if (response.ok) {
+          lastSyncTime = new Date();
+          console.log('✅ Saved to Drive:', new Date().toLocaleTimeString());
+          render(); // Update UI to show last sync time
+        } else {
+          console.error('Error saving to Drive:', response.statusText);
+          alert('Failed to save to Google Drive. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error saving to Drive:', error);
+        alert('Error syncing with Google Drive: ' + error.message);
+      } finally {
+        isSyncing = false;
+      }
+    }
+    
+    // Load from Google Drive
+    async function loadFromDrive() {
+      if (!googleUser || isSyncing) return;
+      
+      isSyncing = true;
+      
+      try {
+        const existingFile = await findDriveFile();
+        
+        if (!existingFile) {
+          console.log('No existing file in Drive, will create on first save');
+          isSyncing = false;
+          return;
+        }
+        
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
+          headers: {
+            'Authorization': `Bearer ${googleAccessToken}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Compare timestamps to avoid overwriting newer local data
+          const localTimestamp = localStorage.getItem('lastModified');
+          const driveTimestamp = data.lastModified;
+          
+          if (!localTimestamp || new Date(driveTimestamp) > new Date(localTimestamp)) {
+            // Drive data is newer, load it
+            state.tasks = data.tasks || [];
+            
+            if (data.settings) {
+              state.darkMode = data.settings.darkMode || 'dark';
+              state.showCountdown = data.settings.showCountdown !== false;
+              state.showDueDate = data.settings.showDueDate !== false;
+              state.sidebarWidth = data.settings.sidebarWidth || 125;
+              state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
+              state.reverseSortOrder = data.settings.reverseSortOrder || {};
+              state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
+              state.customLists = data.settings.customLists || [];
+              state.listDaysAhead = data.settings.listDaysAhead || {};
+            }
+            
+            state.expandedGroups = data.expandedGroups || {};
+            
+            localStorage.setItem('lastModified', driveTimestamp);
+            
+            syncTaskMap();
+            saveState(); // Save to localStorage too
+            state.domInitialized = false; // Force re-render
+            render();
+            
+            lastSyncTime = new Date();
+            console.log('✅ Loaded from Drive:', new Date().toLocaleTimeString());
+          } else {
+            console.log('Local data is newer, keeping local version');
+            lastSyncTime = new Date();
+          }
+        } else {
+          console.error('Error loading from Drive:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error loading from Drive:', error);
+        alert('Error loading from Google Drive: ' + error.message);
+      } finally {
+        isSyncing = false;
+      }
+    }
+    
+    // Sync with Drive (manual sync button)
+    async function syncWithDrive() {
+      if (!googleUser) {
+        alert('Please sign in to Google Drive first');
+        return;
+      }
+      
+      if (isSyncing) {
+        alert('Sync already in progress...');
+        return;
+      }
+      
+      await loadFromDrive();
+      await saveToDrive();
+    }
+    
+    // Start auto-sync
+    function startAutoSync() {
+      stopAutoSync(); // Clear any existing interval
+      
+      // Auto-sync every 5 minutes
+      autoSyncInterval = setInterval(() => {
+        if (googleUser && !isSyncing) {
+          saveToDrive();
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+      
+      console.log('Auto-sync enabled (every 5 minutes)');
+    }
+    
+    // Stop auto-sync
+    function stopAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+        autoSyncInterval = null;
+        console.log('Auto-sync disabled');
+      }
+    }
+    
+    // Update saveState to track lastModified and sync to Drive
+    const originalSaveState = saveState;
+    saveState = function() {
+      originalSaveState();
+      localStorage.setItem('lastModified', new Date().toISOString());
+      
+      // Auto-save to Drive if signed in (debounced)
+      if (googleUser && !isSyncing) {
+        setTimeout(() => {
+          saveToDrive();
+        }, 1000); // Wait 1 second after last change
+      }
+    };
+
+    // Initialize
+    loadState();
+    render();
+    
+    // Initialize Google API when page loads
+    if (typeof gapi !== 'undefined') {
+      initGoogleAPI();
+    } else {
+      console.log('Google API scripts not loaded');
+    }
+  </script>
+</body>
+</html>
