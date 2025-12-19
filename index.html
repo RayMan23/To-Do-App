@@ -759,6 +759,14 @@
       }
     });
     
+    // Sync when tab becomes visible (user switches back to app)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && googleUser && !isSyncing) {
+        console.log('👁️ Tab became visible, syncing...');
+        syncWithDrive();
+      }
+    });
+    
     // Simple state management
     let state = {
       tasks: [],
@@ -1264,7 +1272,8 @@
         completionHistory: [], // Track when task was completed (for recurring tasks)
         subtasks: [],
         expanded: false,
-        parentId
+        parentId,
+        lastModified: new Date().toISOString() // For conflict resolution
       };
 
       if (parentId) {
@@ -2734,7 +2743,11 @@
     function updateTaskById(taskId, updates) {
       const index = state.tasks.findIndex(t => t.id === taskId);
       if (index !== -1) {
-        state.tasks[index] = { ...state.tasks[index], ...updates };
+        state.tasks[index] = { 
+          ...state.tasks[index], 
+          ...updates,
+          lastModified: new Date().toISOString() // Update timestamp for conflict resolution
+        };
       }
     }
 
@@ -2746,7 +2759,8 @@
         if (subtaskIndex !== -1) {
           state.tasks[parentIndex].subtasks[subtaskIndex] = {
             ...state.tasks[parentIndex].subtasks[subtaskIndex],
-            ...updates
+            ...updates,
+            lastModified: new Date().toISOString() // Update timestamp for conflict resolution
           };
         }
       }
@@ -3205,7 +3219,7 @@
                     Sign in with Google
                   </button>
                   <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
-                    Your data will be stored in your Google Drive and synced automatically every 5 minutes.
+                    Your data will be stored in your Google Drive and synced automatically every 30 seconds.
                   </div>
                 ` : `
                   <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
@@ -3304,10 +3318,70 @@
     let autoSyncInterval = null;
     let isSyncing = false;
     let lastSyncTime = null;
+    let tokenClient = null; // Store token client for reuse
+    
+    // Token Persistence - Save/Load from localStorage
+    function saveToken(token, userInfo) {
+      try {
+        localStorage.setItem('googleAccessToken', token);
+        localStorage.setItem('googleUser', JSON.stringify(userInfo));
+        localStorage.setItem('tokenTimestamp', Date.now().toString());
+      } catch (e) {
+        console.error('Failed to save token:', e);
+      }
+    }
+    
+    function loadToken() {
+      try {
+        const token = localStorage.getItem('googleAccessToken');
+        const userInfo = localStorage.getItem('googleUser');
+        const timestamp = localStorage.getItem('tokenTimestamp');
+        
+        if (token && userInfo && timestamp) {
+          const age = Date.now() - parseInt(timestamp);
+          // Tokens are typically valid for 1 hour, we'll check if less than 55 minutes old
+          if (age < 55 * 60 * 1000) {
+            return { token, userInfo: JSON.parse(userInfo) };
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load token:', e);
+      }
+      return null;
+    }
+    
+    function clearToken() {
+      localStorage.removeItem('googleAccessToken');
+      localStorage.removeItem('googleUser');
+      localStorage.removeItem('tokenTimestamp');
+    }
     
     // Initialize Google API (simplified - using REST API directly)
-    function initGoogleAPI() {
+    async function initGoogleAPI() {
       console.log('✅ Using Google Drive REST API directly (no gapi.client needed)');
+      
+      // Try to auto-sign-in with saved token
+      const saved = loadToken();
+      if (saved) {
+        console.log('🔐 Found saved token, attempting auto sign-in...');
+        googleAccessToken = saved.token;
+        googleUser = saved.userInfo;
+        
+        // Verify token is still valid by trying to load from Drive
+        try {
+          await loadFromDrive();
+          startAutoSync();
+          render();
+          console.log('✅ Auto sign-in successful:', googleUser.email);
+        } catch (error) {
+          console.log('⚠️ Saved token expired or invalid, please sign in again');
+          clearToken();
+          googleUser = null;
+          googleAccessToken = null;
+          render();
+        }
+      }
+      
       return Promise.resolve();
     }
     
@@ -3360,6 +3434,10 @@
             
             console.log('📸 GoogleUser object:', googleUser);
             
+            // Save token for auto sign-in next time
+            saveToken(googleAccessToken, googleUser);
+            console.log('💾 Token saved for persistent login');
+            
             await loadFromDrive();
             startAutoSync();
             render();
@@ -3382,6 +3460,10 @@
           console.log('Access token revoked');
         });
       }
+      
+      // Clear stored token
+      clearToken();
+      console.log('💾 Saved token cleared');
       
       googleUser = null;
       googleAccessToken = null;
@@ -3493,6 +3575,40 @@
       }
     }
     
+    // Intelligent conflict resolution - merge tasks instead of overwriting everything
+    function mergeTasks(localTasks, driveTasks) {
+      const merged = new Map();
+      
+      // Add all drive tasks
+      driveTasks.forEach(task => {
+        merged.set(task.id, { ...task, source: 'drive' });
+      });
+      
+      // Merge local tasks
+      localTasks.forEach(localTask => {
+        const driveTask = merged.get(localTask.id);
+        
+        if (!driveTask) {
+          // Task only exists locally - keep it
+          merged.set(localTask.id, { ...localTask, source: 'local' });
+        } else {
+          // Task exists in both - compare timestamps
+          const localTime = new Date(localTask.lastModified || 0);
+          const driveTime = new Date(driveTask.lastModified || 0);
+          
+          if (localTime > driveTime) {
+            // Local version is newer
+            merged.set(localTask.id, { ...localTask, source: 'local-newer' });
+          } else {
+            // Drive version is newer or same - already in map
+            merged.set(localTask.id, { ...driveTask, source: 'drive-newer' });
+          }
+        }
+      });
+      
+      return Array.from(merged.values());
+    }
+    
     // Load from Google Drive
     async function loadFromDrive() {
       if (!googleUser || isSyncing) return;
@@ -3517,41 +3633,43 @@
         if (response.ok) {
           const data = await response.json();
           
-          // Compare timestamps to avoid overwriting newer local data
-          const localTimestamp = localStorage.getItem('lastModified');
-          const driveTimestamp = data.lastModified;
+          // Intelligent merge instead of simple overwrite
+          const localTasks = state.tasks || [];
+          const driveTasks = data.tasks || [];
           
-          if (!localTimestamp || new Date(driveTimestamp) > new Date(localTimestamp)) {
-            // Drive data is newer, load it
-            state.tasks = data.tasks || [];
-            
-            if (data.settings) {
-              state.darkMode = data.settings.darkMode || 'dark';
-              state.showCountdown = data.settings.showCountdown !== false;
-              state.showDueDate = data.settings.showDueDate !== false;
-              state.sidebarWidth = data.settings.sidebarWidth || 125;
-              state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
-              state.reverseSortOrder = data.settings.reverseSortOrder || {};
-              state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
-              state.customLists = data.settings.customLists || [];
-              state.listDaysAhead = data.settings.listDaysAhead || {};
-            }
-            
-            state.expandedGroups = data.expandedGroups || {};
-            
-            localStorage.setItem('lastModified', driveTimestamp);
-            
-            syncTaskMap();
-            saveState(); // Save to localStorage too
-            state.domInitialized = false; // Force re-render
-            render();
-            
-            lastSyncTime = new Date();
-            console.log('✅ Loaded from Drive:', new Date().toLocaleTimeString());
-          } else {
-            console.log('Local data is newer, keeping local version');
-            lastSyncTime = new Date();
+          console.log(`📊 Merging: ${localTasks.length} local tasks + ${driveTasks.length} drive tasks`);
+          
+          // Merge tasks intelligently (task-level conflict resolution)
+          state.tasks = mergeTasks(localTasks, driveTasks);
+          
+          console.log(`✅ Result: ${state.tasks.length} tasks after merge`);
+          
+          // Settings: always use Drive version (these are unlikely to conflict)
+          if (data.settings) {
+            state.darkMode = data.settings.darkMode || 'dark';
+            state.showCountdown = data.settings.showCountdown !== false;
+            state.showDueDate = data.settings.showDueDate !== false;
+            state.sidebarWidth = data.settings.sidebarWidth || 125;
+            state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
+            state.reverseSortOrder = data.settings.reverseSortOrder || {};
+            state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
+            state.customLists = data.settings.customLists || [];
+            state.listDaysAhead = data.settings.listDaysAhead || {};
           }
+          
+          state.expandedGroups = data.expandedGroups || {};
+          
+          // Update lastModified to current time since we just merged
+          const now = new Date().toISOString();
+          localStorage.setItem('lastModified', now);
+          
+          syncTaskMap();
+          saveState(); // Save to localStorage too
+          state.domInitialized = false; // Force re-render
+          render();
+          
+          lastSyncTime = new Date();
+          console.log('✅ Loaded and merged from Drive:', new Date().toLocaleTimeString());
         } else {
           console.error('Error loading from Drive:', response.statusText);
         }
@@ -3583,14 +3701,14 @@
     function startAutoSync() {
       stopAutoSync(); // Clear any existing interval
       
-      // Auto-sync every 5 minutes
+      // Auto-sync every 30 seconds for near real-time updates
       autoSyncInterval = setInterval(() => {
         if (googleUser && !isSyncing) {
           saveToDrive();
         }
-      }, 5 * 60 * 1000); // 5 minutes
+      }, 30 * 1000); // 30 seconds
       
-      console.log('Auto-sync enabled (every 5 minutes)');
+      console.log('Auto-sync enabled (every 30 seconds)');
     }
     
     // Stop auto-sync
