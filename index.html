@@ -620,6 +620,45 @@
       pointer-events: none;
       animation: confetti 0.6s ease-out forwards;
     }
+    
+    /* Sync Status Indicator */
+    .sync-status {
+      position: absolute;
+      top: 12px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--bg-secondary);
+      border-radius: 20px;
+      font-size: 12px;
+      opacity: 0.7;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+      user-select: none;
+    }
+    
+    .sync-status:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    
+    .sync-status.hidden {
+      display: none;
+    }
+    
+    .sync-icon {
+      font-size: 14px;
+      line-height: 1;
+    }
+    
+    .sync-text {
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -2888,6 +2927,17 @@
           
           <div class="main-content" onclick="if(event.target === this || event.target.classList.contains('main-inner')) { toggleMenu(); }">
             <div class="main-inner">
+              <!-- Sync Status Indicator (hides in focus mode) -->
+              <div class="sync-status ${state.showMenu ? '' : 'hidden'}" onclick="event.stopPropagation(); state.showSettings = true; render();" title="Click to open settings">
+                ${googleUser ? `
+                  <span class="sync-icon">${isSyncing ? '⏳' : '✅'}</span>
+                  <span class="sync-text">${isSyncing ? 'Syncing...' : (lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Synced')}</span>
+                ` : `
+                  <span class="sync-icon">⚠️</span>
+                  <span class="sync-text">Not signed in</span>
+                `}
+              </div>
+              
               <div class="add-task-form ${state.showMenu && state.view !== 'recurring' && state.view !== 'dueby' ? '' : 'hidden'}">
                 <input 
                   type="text" 
@@ -3339,8 +3389,9 @@
         
         if (token && userInfo && timestamp) {
           const age = Date.now() - parseInt(timestamp);
-          // Tokens are typically valid for 1 hour, we'll check if less than 55 minutes old
-          if (age < 55 * 60 * 1000) {
+          // Extended to 24 hours - we'll handle expiration gracefully via API errors
+          // This means you stay signed in much longer, and only re-auth when actually needed
+          if (age < 24 * 60 * 60 * 1000) {
             return { token, userInfo: JSON.parse(userInfo) };
           }
         }
@@ -3450,6 +3501,9 @@
         }
       });
       
+      // Store token client for automatic refresh
+      tokenClient = client;
+      
       client.requestAccessToken();
     }
     
@@ -3468,6 +3522,7 @@
       googleUser = null;
       googleAccessToken = null;
       lastSyncTime = null;
+      tokenClient = null;
       stopAutoSync();
       
       render();
