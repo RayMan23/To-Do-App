@@ -798,11 +798,28 @@
       }
     });
     
-    // Sync when tab becomes visible (user switches back to app)
+    // Sync when tab becomes visible (user switches back to app) - Trigger 2
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && googleUser && !isSyncing) {
         console.log('👁️ Tab became visible, syncing...');
         syncWithDrive();
+      }
+    });
+    
+    // Activity-based sync check - Trigger 3
+    // Check for updates when user is actively using the app (clicking around)
+    // Debounced to max once per 30 seconds
+    document.addEventListener('click', () => {
+      if (!googleUser || isSyncing) return; // Skip if not signed in or already syncing
+      
+      const now = Date.now();
+      const timeSinceLastCheck = now - lastActivityCheck;
+      
+      // Only check if more than 30 seconds since last activity check
+      if (timeSinceLastCheck > 30000) { // 30 seconds
+        console.log('🖱️ User activity detected, checking for updates...');
+        loadFromDrive();
+        lastActivityCheck = now;
       }
     });
     
@@ -3386,6 +3403,8 @@
     let tokenClient = null; // Store token client for reuse
     let hasUnsyncedChanges = false; // Track if local changes need syncing
     let syncTimeout = null; // For debounced sync
+    let syncChannel = null; // Broadcast channel for same-device sync
+    let lastActivityCheck = 0; // Timestamp for activity-based checks
     
     // Token Persistence - Save/Load from localStorage
     function saveToken(token, userInfo) {
@@ -3430,6 +3449,15 @@
       
       hasUnsyncedChanges = true;
       
+      // Notify other tabs/windows on same device (Trigger 4)
+      if (syncChannel) {
+        try {
+          syncChannel.postMessage({ type: 'data-changed' });
+        } catch (error) {
+          console.log('⚠️ Could not broadcast to other tabs');
+        }
+      }
+      
       // Clear any pending sync timeout
       if (syncTimeout) {
         clearTimeout(syncTimeout);
@@ -3448,6 +3476,22 @@
     // Initialize Google API (simplified - using REST API directly)
     async function initGoogleAPI() {
       console.log('✅ Using Google Drive REST API directly (no gapi.client needed)');
+      
+      // Initialize Broadcast Channel for same-device sync (Trigger 4)
+      try {
+        syncChannel = new BroadcastChannel('todo-sync-channel');
+        syncChannel.onmessage = (event) => {
+          if (event.data.type === 'data-changed') {
+            console.log('📡 Another tab/window made changes, syncing...');
+            if (googleUser && !isSyncing) {
+              loadFromDrive();
+            }
+          }
+        };
+        console.log('✅ Broadcast channel initialized (same-device instant sync)');
+      } catch (error) {
+        console.log('⚠️ Broadcast Channel not supported in this browser');
+      }
       
       // Try to auto-sign-in with saved token
       const saved = loadToken();
@@ -3658,6 +3702,14 @@
           hasUnsyncedChanges = false; // Clear flag after successful sync
           console.log('✅ Saved to Drive:', new Date().toLocaleTimeString());
           render(); // Update UI to show last sync time
+          
+          // Trigger 1: After-save check - check for updates from other devices 10s later
+          setTimeout(() => {
+            if (googleUser && !isSyncing) {
+              console.log('🔍 Checking for updates from other devices (after-save)...');
+              loadFromDrive();
+            }
+          }, 10000); // 10 seconds
         } else {
           const errorText = await response.text();
           console.error('Error saving to Drive:', response.status, response.statusText, errorText);
@@ -3849,7 +3901,7 @@
         }
       }, 60 * 1000); // 60 seconds backup
       
-      console.log('✅ Event-based sync enabled (debounced 1s) + 60s backup timer');
+      console.log('✅ Smart sync enabled: (1) After changes, (2) Tab visibility, (3) Activity, (4) Cross-tab broadcast');
     }
     
     // Stop auto-sync
