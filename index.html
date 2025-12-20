@@ -995,21 +995,21 @@
     // Update days ahead for a list
     function updateListDaysAhead(listId, days) {
       state.listDaysAhead[listId] = parseInt(days);
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
     // Update sort preference for a view
     function updateViewSort(viewId, sortType) {
       state.viewSortPreferences[viewId] = sortType;
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
     
     // Toggle reverse sort order for a view
     function toggleReverseSortOrder(viewId) {
       state.reverseSortOrder[viewId] = !state.reverseSortOrder[viewId];
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1058,7 +1058,7 @@
       const handle = document.querySelector('.sidebar-resize-handle');
       if (handle) handle.classList.remove('resizing');
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
     }
 
     // Set up resize listeners
@@ -1082,7 +1082,7 @@
       };
       
       state.customLists.push(newList);
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1103,7 +1103,7 @@
         state.view = 'today';
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1248,7 +1248,7 @@
       );
       
       state.draggingTask = null;
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1334,7 +1334,7 @@
         state.tasks.unshift(newTask);
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       
       const useIncremental = shouldUseIncrementalUpdate();
       
@@ -1361,14 +1361,14 @@
         updateTaskById(actualTaskId, { completionHistory });
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
     // Restore/unpause a recurring task
     function restoreRecurringTask(taskId) {
       updateTaskById(taskId, { recurringPaused: false, completed: false });
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1638,7 +1638,7 @@
             });
           }
           
-          debouncedSaveState();
+          triggerSync(); // Event-based sync
           
           // Incremental update for recurring tasks - just update checkbox state
           if (useIncremental) {
@@ -1653,7 +1653,7 @@
         if (state.view === 'recurring') {
           await celebrateCompletion(taskId);
           updateTaskById(taskId, { recurringPaused: true, completed: true });
-          debouncedSaveState();
+          triggerSync(); // Event-based sync
           
           // Incremental update: remove from DOM
           if (useIncremental) {
@@ -1684,7 +1684,7 @@
           };
           updateSubtaskById(parentId, taskId, updates);
           
-          debouncedSaveState();
+          triggerSync(); // Event-based sync
           
           // Use full render to properly handle subtask section movement
           // (incomplete subtasks vs completed subtasks sections)
@@ -1705,7 +1705,7 @@
         };
         updateTaskById(taskId, updates);
         
-        debouncedSaveState();
+        triggerSync(); // Event-based sync
         
         // Use full render for main tasks to properly handle completed/incomplete section movement
         // and ensure proper visual feedback
@@ -1796,7 +1796,7 @@
         state.tasks.splice(index + 1, 0, duplicatedTask);
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1836,7 +1836,7 @@
         );
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1856,7 +1856,7 @@
         updateTaskById(taskId, { recurring, recurringDays });
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1873,14 +1873,14 @@
         updateTaskById(taskId, { recurringDays });
       }
       
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
     // Update monthly recurrence
     function updateMonthlyRecurrence(taskId, value) {
       updateTaskById(taskId, { recurringMonthly: value });
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -1895,7 +1895,7 @@
       }
       
       state.editingTask = null;
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -2487,7 +2487,7 @@
       } else {
         state.workDays = [...state.workDays, day].sort();
       }
-      debouncedSaveState();
+      triggerSync(); // Event-based sync
       render();
     }
 
@@ -2993,8 +2993,8 @@
               <div class="settings-section">
                 <label>Theme</label>
                 <div class="button-group">
-                  <button class="btn" onclick="state.darkMode = 'light'; debouncedSaveState(); render()">Light Mode</button>
-                  <button class="btn" onclick="state.darkMode = 'dark'; debouncedSaveState(); render()">Dark Mode</button>
+                  <button class="btn" onclick="state.darkMode = 'light'; triggerSync(); // Event-based sync render()">Light Mode</button>
+                  <button class="btn" onclick="state.darkMode = 'dark'; triggerSync(); // Event-based sync render()">Dark Mode</button>
                 </div>
               </div>
               
@@ -3138,7 +3138,7 @@
                   <input 
                     type="checkbox" 
                     ${state.showCountdown ? 'checked' : ''} 
-                    onchange="state.showCountdown = this.checked; debouncedSaveState(); render()"
+                    onchange="state.showCountdown = this.checked; triggerSync(); // Event-based sync render()"
                   />
                   Show deadline countdown
                 </label>
@@ -3149,7 +3149,7 @@
                   <input 
                     type="checkbox" 
                     ${state.showDueDate ? 'checked' : ''} 
-                    onchange="state.showDueDate = this.checked; debouncedSaveState(); render()"
+                    onchange="state.showDueDate = this.checked; triggerSync(); // Event-based sync render()"
                   />
                   Show due date in Due By view
                 </label>
@@ -3284,7 +3284,7 @@
                     Sign in with Google
                   </button>
                   <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
-                    Your data will be stored in your Google Drive and synced automatically every 5 seconds.
+                    Your data will be stored in your Google Drive and synced automatically after each change.
                   </div>
                 ` : `
                   <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
@@ -3384,6 +3384,8 @@
     let isSyncing = false;
     let lastSyncTime = null;
     let tokenClient = null; // Store token client for reuse
+    let hasUnsyncedChanges = false; // Track if local changes need syncing
+    let syncTimeout = null; // For debounced sync
     
     // Token Persistence - Save/Load from localStorage
     function saveToken(token, userInfo) {
@@ -3420,6 +3422,27 @@
       localStorage.removeItem('googleAccessToken');
       localStorage.removeItem('googleUser');
       localStorage.removeItem('tokenTimestamp');
+    }
+    
+    // Debounced sync - triggers sync 1 second after last change
+    function triggerSync() {
+      if (!googleUser) return; // Can't sync if not signed in
+      
+      hasUnsyncedChanges = true;
+      
+      // Clear any pending sync timeout
+      if (syncTimeout) {
+        clearTimeout(syncTimeout);
+      }
+      
+      // Wait 1 second for user to finish making changes, then sync
+      syncTimeout = setTimeout(() => {
+        if (hasUnsyncedChanges && googleUser && !isSyncing) {
+          console.log('⚡ Syncing after user changes...');
+          saveToDrive();
+          hasUnsyncedChanges = false;
+        }
+      }, 1000); // 1 second debounce
     }
     
     // Initialize Google API (simplified - using REST API directly)
@@ -3632,6 +3655,7 @@
         
         if (response.ok) {
           lastSyncTime = new Date();
+          hasUnsyncedChanges = false; // Clear flag after successful sync
           console.log('✅ Saved to Drive:', new Date().toLocaleTimeString());
           render(); // Update UI to show last sync time
         } else {
@@ -3782,6 +3806,7 @@
           render();
           
           lastSyncTime = new Date();
+          hasUnsyncedChanges = false; // We're now in sync with Drive
           console.log('✅ Loaded and merged from Drive:', new Date().toLocaleTimeString());
         } else {
           console.error('Error loading from Drive:', response.statusText);
@@ -3814,14 +3839,17 @@
     function startAutoSync() {
       stopAutoSync(); // Clear any existing interval
       
-      // Auto-sync every 5 seconds for near-instant updates across devices
+      // Backup sync every 60 seconds (only if there are unsynced changes)
+      // Primary sync is event-based via triggerSync()
       autoSyncInterval = setInterval(() => {
-        if (googleUser && !isSyncing) {
+        if (googleUser && !isSyncing && hasUnsyncedChanges) {
+          console.log('⏰ Backup sync (safety net)...');
           saveToDrive();
+          hasUnsyncedChanges = false;
         }
-      }, 5 * 1000); // 5 seconds
+      }, 60 * 1000); // 60 seconds backup
       
-      console.log('Auto-sync enabled (every 5 seconds)');
+      console.log('✅ Event-based sync enabled (debounced 1s) + 60s backup timer');
     }
     
     // Stop auto-sync
