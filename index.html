@@ -809,6 +809,7 @@
     // Simple state management
     let state = {
       tasks: [],
+      deletedTaskIds: [], // Track IDs of deleted tasks for sync conflict resolution
       taskMap: new Map(), // O(1) task lookups
       view: 'today',
       showMenu: true,
@@ -927,6 +928,13 @@
           }));
         }
         
+        const savedDeletedIds = localStorage.getItem('deletedTaskIds');
+        if (savedDeletedIds) {
+          state.deletedTaskIds = JSON.parse(savedDeletedIds);
+        } else {
+          state.deletedTaskIds = [];
+        }
+        
         const savedSettings = localStorage.getItem('settings');
         if (savedSettings) {
           const settings = JSON.parse(savedSettings);
@@ -962,6 +970,7 @@
     function saveState() {
       try {
         localStorage.setItem('tasks', JSON.stringify(state.tasks));
+        localStorage.setItem('deletedTaskIds', JSON.stringify(state.deletedTaskIds || []));
         localStorage.setItem('settings', JSON.stringify({
           darkMode: state.darkMode,
           showCountdown: state.showCountdown,
@@ -1719,6 +1728,12 @@
 
     // Delete task
     function deleteTask(taskId, parentId = null) {
+      // Track deletion for sync conflict resolution
+      if (!state.deletedTaskIds) state.deletedTaskIds = [];
+      if (!state.deletedTaskIds.includes(taskId)) {
+        state.deletedTaskIds.push(taskId);
+      }
+      
       if (parentId) {
         state.tasks = state.tasks.map(task =>
           task.id === parentId
@@ -3269,7 +3284,7 @@
                     Sign in with Google
                   </button>
                   <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;">
-                    Your data will be stored in your Google Drive and synced automatically every 30 seconds.
+                    Your data will be stored in your Google Drive and synced automatically every 5 seconds.
                   </div>
                 ` : `
                   <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
@@ -3564,6 +3579,7 @@
       try {
         const data = {
           tasks: state.tasks,
+          deletedTaskIds: state.deletedTaskIds || [], // Track deleted task IDs
           settings: {
             darkMode: state.darkMode,
             showCountdown: state.showCountdown,
@@ -3619,28 +3635,58 @@
           console.log('✅ Saved to Drive:', new Date().toLocaleTimeString());
           render(); // Update UI to show last sync time
         } else {
-          console.error('Error saving to Drive:', response.statusText);
-          alert('Failed to save to Google Drive. Please try again.');
+          const errorText = await response.text();
+          console.error('Error saving to Drive:', response.status, response.statusText, errorText);
+          
+          // Show user-friendly error message based on status code
+          if (response.status === 401) {
+            console.log('⚠️ Token expired, please sign in again');
+            googleUser = null;
+            googleAccessToken = null;
+            clearToken();
+            render();
+            alert('Your session has expired. Please sign in to Google Drive again.');
+          } else if (response.status === 429) {
+            console.log('⚠️ Rate limit hit, will retry later');
+            // Don't alert - auto-retry will handle it
+          } else {
+            alert(`Failed to save to Google Drive (${response.status}). Changes saved locally and will retry.`);
+          }
         }
       } catch (error) {
         console.error('Error saving to Drive:', error);
-        alert('Error syncing with Google Drive: ' + error.message);
+        // Don't alert for network errors - just log and retry later
+        console.log('⚠️ Sync failed, will retry on next interval');
       } finally {
         isSyncing = false;
       }
     }
     
-    // Intelligent conflict resolution - merge tasks instead of overwriting everything
-    function mergeTasks(localTasks, driveTasks) {
+    // Intelligent conflict resolution - merge tasks AND respect deletions
+    function mergeTasks(localTasks, driveTasks, localDeletedIds = [], driveDeletedIds = []) {
       const merged = new Map();
       
-      // Add all drive tasks
+      // Combine all deleted IDs from both sources
+      const allDeletedIds = new Set([...localDeletedIds, ...driveDeletedIds]);
+      
+      console.log(`🗑️ Deleted IDs to filter out: ${Array.from(allDeletedIds).join(', ')}`);
+      
+      // Add all drive tasks (excluding deleted ones)
       driveTasks.forEach(task => {
-        merged.set(task.id, { ...task, source: 'drive' });
+        if (!allDeletedIds.has(task.id)) {
+          merged.set(task.id, { ...task, source: 'drive' });
+        } else {
+          console.log(`⛔ Skipping deleted task from drive: ${task.id}`);
+        }
       });
       
-      // Merge local tasks
+      // Merge local tasks (excluding deleted ones)
       localTasks.forEach(localTask => {
+        if (allDeletedIds.has(localTask.id)) {
+          console.log(`⛔ Skipping deleted task from local: ${localTask.id}`);
+          return;
+        }
+        
         const driveTask = merged.get(localTask.id);
         
         if (!driveTask) {
@@ -3691,13 +3737,25 @@
           // Intelligent merge instead of simple overwrite
           const localTasks = state.tasks || [];
           const driveTasks = data.tasks || [];
+          const localDeletedIds = state.deletedTaskIds || [];
+          const driveDeletedIds = data.deletedTaskIds || [];
           
           console.log(`📊 Merging: ${localTasks.length} local tasks + ${driveTasks.length} drive tasks`);
+          console.log(`🗑️ Deletions: ${localDeletedIds.length} local + ${driveDeletedIds.length} drive`);
           
-          // Merge tasks intelligently (task-level conflict resolution)
-          state.tasks = mergeTasks(localTasks, driveTasks);
+          // Merge tasks intelligently (task-level conflict resolution + deletion tracking)
+          state.tasks = mergeTasks(localTasks, driveTasks, localDeletedIds, driveDeletedIds);
+          
+          // Merge deletion lists (keep union of both)
+          state.deletedTaskIds = Array.from(new Set([...localDeletedIds, ...driveDeletedIds]));
+          
+          // Cleanup: keep only last 100 deleted IDs to prevent list from growing forever
+          if (state.deletedTaskIds.length > 100) {
+            state.deletedTaskIds = state.deletedTaskIds.slice(-100);
+          }
           
           console.log(`✅ Result: ${state.tasks.length} tasks after merge`);
+          console.log(`🗑️ Tracking ${state.deletedTaskIds.length} deleted task IDs`);
           
           // Settings: always use Drive version (these are unlikely to conflict)
           if (data.settings) {
@@ -3706,7 +3764,7 @@
             state.showDueDate = data.settings.showDueDate !== false;
             state.sidebarWidth = data.settings.sidebarWidth || 125;
             state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
-            state.reverseSortOrder = data.settings.reverseSortOrder || {};
+            state.reverseSortOrder = data.reverseSortOrder || {};
             state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
             state.customLists = data.settings.customLists || [];
             state.listDaysAhead = data.settings.listDaysAhead || {};
@@ -3756,14 +3814,14 @@
     function startAutoSync() {
       stopAutoSync(); // Clear any existing interval
       
-      // Auto-sync every 30 seconds for near real-time updates
+      // Auto-sync every 5 seconds for near-instant updates across devices
       autoSyncInterval = setInterval(() => {
         if (googleUser && !isSyncing) {
           saveToDrive();
         }
-      }, 30 * 1000); // 30 seconds
+      }, 5 * 1000); // 5 seconds
       
-      console.log('Auto-sync enabled (every 30 seconds)');
+      console.log('Auto-sync enabled (every 5 seconds)');
     }
     
     // Stop auto-sync
