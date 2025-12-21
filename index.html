@@ -2198,9 +2198,12 @@
         return checkListViewTask(task, VIEWS.PROJECTS, today);
       }
 
-      // Due By view
+      // Due By view - show tasks due AFTER today (tomorrow and onwards)
       if (state.view === VIEWS.DUEBY) {
-        return task.dueDate && new Date(task.dueDate) > now;
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        dueDate.setHours(0, 0, 0, 0); // Normalize to midnight
+        return dueDate > today; // Due after today
       }
 
       // Recurring view
@@ -2230,9 +2233,15 @@
         // Show tasks with due dates based on their origin list's days ahead setting
         if (task.dueDate) {
           const dueDate = new Date(task.dueDate);
+          dueDate.setHours(0, 0, 0, 0); // Normalize to midnight for date-only comparison
+          
+          // CRITICAL: Always show tasks due today or earlier
+          if (dueDate <= today) return true;
+          
+          // For future dates, check days ahead setting
           const daysAhead = getDaysAheadForList(task.createdIn || VIEWS.TODAY);
-          const daysFromNow = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-          if (dueDate >= now && dueDate <= daysFromNow) return true;
+          const daysFromNow = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+          if (dueDate <= daysFromNow) return true;
         }
         
         // Show parent tasks if any subtask has a due date within its origin list's days ahead
@@ -2240,10 +2249,15 @@
           const hasSubtaskDueSoon = task.subtasks.some(subtask => {
             if (subtask.dueDate) {
               const subDueDate = new Date(subtask.dueDate);
-              // Use the parent task's origin list setting for subtasks
+              subDueDate.setHours(0, 0, 0, 0); // Normalize to midnight
+              
+              // Always show if subtask due today or earlier
+              if (subDueDate <= today) return true;
+              
+              // For future dates, check days ahead setting
               const daysAhead = getDaysAheadForList(task.createdIn || 'today');
-              const daysFromNow = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-              return subDueDate >= now && subDueDate <= daysFromNow;
+              const daysFromNow = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+              return subDueDate <= daysFromNow;
             }
             return false;
           });
