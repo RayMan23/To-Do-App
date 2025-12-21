@@ -165,6 +165,7 @@
       min-width: 100px;
       max-width: 400px;
       padding: 16px;
+      padding-bottom: 100px; /* Extra padding for mobile OS navigation bars */
       display: flex;
       flex-direction: column;
       z-index: 10;
@@ -1262,6 +1263,72 @@
       return 'Other';
     }
 
+    // ===== RECURSIVE HELPERS FOR NESTED SUBTASKS =====
+    
+    // Find a task by ID recursively (searches entire tree)
+    function findTaskRecursive(tasks, taskId) {
+      for (const task of tasks) {
+        if (task.id === taskId) return task;
+        if (task.subtasks) {
+          const found = findTaskRecursive(task.subtasks, taskId);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    
+    // Update a task recursively
+    function updateTaskRecursive(tasks, taskId, updates) {
+      return tasks.map(task => {
+        if (task.id === taskId) {
+          return { ...task, ...updates };
+        }
+        if (task.subtasks) {
+          return { ...task, subtasks: updateTaskRecursive(task.subtasks, taskId, updates) };
+        }
+        return task;
+      });
+    }
+    
+    // Delete a task recursively
+    function deleteTaskRecursive(tasks, taskId) {
+      return tasks.filter(task => {
+        if (task.id === taskId) return false;
+        if (task.subtasks) {
+          task.subtasks = deleteTaskRecursive(task.subtasks, taskId);
+        }
+        return true;
+      });
+    }
+    
+    // Check if task or any nested subtask has due date within range
+    function hasNestedSubtaskDueInRange(task, today, daysAhead) {
+      // Check this task's subtasks
+      if (task.subtasks) {
+        for (const sub of task.subtasks) {
+          if (sub.dueDate) {
+            const subDueDate = new Date(sub.dueDate);
+            subDueDate.setHours(0, 0, 0, 0);
+            const subDueDateStr = subDueDate.toDateString();
+            const todayStr = today.toDateString();
+            
+            // Check if subtask due today or in future
+            if (subDueDateStr === todayStr) return true;
+            if (subDueDate < today && subDueDateStr !== todayStr) continue; // Skip overdue
+            
+            const daysFromNow = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+            if (subDueDate <= daysFromNow) return true;
+          }
+          
+          // Recursively check sub-subtasks
+          if (hasNestedSubtaskDueInRange(sub, today, daysAhead)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
     // Add task
     function addTask(text, parentId = null) {
       const validatedText = validateTaskText(text);
@@ -1299,11 +1366,19 @@
       };
 
       if (parentId) {
-        state.tasks = state.tasks.map(task =>
-          task.id === parentId
-            ? { ...task, subtasks: [newTask, ...task.subtasks] }
-            : task
-        );
+        // Recursively find parent and add subtask
+        function addSubtaskToParent(tasks) {
+          return tasks.map(task => {
+            if (task.id === parentId) {
+              return { ...task, subtasks: [newTask, ...(task.subtasks || [])], expanded: true };
+            }
+            if (task.subtasks) {
+              return { ...task, subtasks: addSubtaskToParent(task.subtasks) };
+            }
+            return task;
+          });
+        }
+        state.tasks = addSubtaskToParent(state.tasks);
       } else {
         state.tasks.unshift(newTask);
       }
@@ -1708,15 +1783,8 @@
         state.deletedTaskIds.push(taskId);
       }
       
-      if (parentId) {
-        state.tasks = state.tasks.map(task =>
-          task.id === parentId
-            ? { ...task, subtasks: task.subtasks.filter(sub => sub.id !== taskId) }
-            : task
-        );
-      } else {
-        state.tasks = state.tasks.filter(task => task.id !== taskId);
-      }
+      // Use recursive delete helper to delete at any level
+      state.tasks = deleteTaskRecursive(state.tasks, taskId);
       
       saveState();
       
@@ -1733,9 +1801,9 @@
     // Duplicate task
     function duplicateTask(taskId, parentId = null) {
       saveScrollPosition();
-      const sourceTask = parentId 
-        ? state.taskMap.get(parentId)?.subtasks.find(s => s.id === taskId)
-        : state.taskMap.get(taskId);
+      
+      // Find task recursively
+      const sourceTask = findTaskRecursive(state.tasks, taskId);
       
       if (!sourceTask) return;
       
@@ -1758,12 +1826,19 @@
       };
       
       if (parentId) {
-        // Duplicate as a subtask
-        state.tasks = state.tasks.map(task =>
-          task.id === parentId
-            ? { ...task, subtasks: [...task.subtasks, duplicatedTask] }
-            : task
-        );
+        // Duplicate as a subtask - add to parent recursively
+        function addDuplicateToParent(tasks) {
+          return tasks.map(task => {
+            if (task.id === parentId) {
+              return { ...task, subtasks: [...(task.subtasks || []), duplicatedTask] };
+            }
+            if (task.subtasks) {
+              return { ...task, subtasks: addDuplicateToParent(task.subtasks) };
+            }
+            return task;
+          });
+        }
+        state.tasks = addDuplicateToParent(state.tasks);
       } else {
         // Duplicate as a main task - insert right after the original
         const index = state.tasks.findIndex(t => t.id === taskId);
@@ -2270,30 +2345,12 @@
           if (dueDate <= daysFromNow) return true;
         }
         
-        // Show parent tasks if any subtask has a due date within its origin list's days ahead
+        // Show parent tasks if any nested subtask has a due date within range
         if (task.subtasks && task.subtasks.length > 0) {
-          const hasSubtaskDueSoon = task.subtasks.some(subtask => {
-            if (subtask.dueDate) {
-              const subDueDate = new Date(subtask.dueDate);
-              subDueDate.setHours(0, 0, 0, 0); // Normalize to midnight
-              
-              const subDueDateStr = subDueDate.toDateString();
-              const todayStr = today.toDateString();
-              
-              // CHANGED: Exclude overdue subtasks (they appear in Due By view)
-              if (subDueDate < today && subDueDateStr !== todayStr) return false;
-              
-              // Show if subtask due today
-              if (subDueDateStr === todayStr) return true;
-              
-              // For future dates, check days ahead setting
-              const daysAhead = getDaysAheadForList(task.createdIn || 'today');
-              const daysFromNow = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-              return subDueDate <= daysFromNow;
-            }
-            return false;
-          });
-          if (hasSubtaskDueSoon) return true;
+          const daysAhead = getDaysAheadForList(task.createdIn || 'today');
+          if (hasNestedSubtaskDueInRange(task, today, daysAhead)) {
+            return true;
+          }
         }
         
         return false;
@@ -2536,13 +2593,46 @@
       return { isOverdue: false };
     }
 
-    // Render task item
-    function renderTask(task, isSubtask = false) {
+    // Get task for display - resets subtask completion for recurring tasks on new days
+    function getTaskForDisplay(task) {
+      // If not recurring or no subtasks, return as-is
+      if (!task.recurring || !task.subtasks || task.subtasks.length === 0) {
+        return task;
+      }
+      
+      // Check if this recurring task has been completed today
+      const today = new Date();
+      const todayStr = today.toDateString();
+      const completedToday = task.completionHistory && task.completionHistory.includes(todayStr);
+      
+      // If completed today, show subtasks as they are (completed)
+      if (completedToday) {
+        return task;
+      }
+      
+      // Not completed today - reset all subtasks recursively to incomplete for display
+      const resetSubtasksRecursive = (subtasks) => {
+        return subtasks.map(subtask => ({
+          ...subtask,
+          completed: false,
+          completedAt: null,
+          subtasks: subtask.subtasks ? resetSubtasksRecursive(subtask.subtasks) : []
+        }));
+      };
+      
+      return {
+        ...task,
+        subtasks: resetSubtasksRecursive(task.subtasks)
+      };
+    }
+
+    // Render task item - FULLY RECURSIVE for nested subtasks
+    function renderTask(task, level = 0, parentId = null) {
       // Simple display for completion records
       if (task.isCompletionRecord) {
         return `
           <div>
-            <div class="task-item completed" style="position: relative;">
+            <div class="task-item completed" style="position: relative; margin-left: ${level * 40}px;">
               <input type="checkbox" checked disabled style="cursor: default;" />
               <span class="task-text completed">${task.text} <span style="font-size: 12px; opacity: 0.7;">(${formatCompletionDate(task.completionDate)})</span></span>
               <button 
@@ -2558,14 +2648,19 @@
         `;
       }
       
-      const hasSubtasks = !isSubtask && task.subtasks && task.subtasks.length > 0;
+      // For recurring tasks, reset subtask completion on new days (only for top-level tasks)
+      if (level === 0) {
+        task = getTaskForDisplay(task);
+      }
+      
+      const hasSubtasks = task.subtasks && task.subtasks.length > 0;
       const incompleteSubtasks = hasSubtasks ? task.subtasks.filter(sub => !sub.completed) : [];
       const completedSubtasks = hasSubtasks ? task.subtasks.filter(sub => sub.completed) : [];
       const completedToday = task.recurring && isCompletedToday(task);
       const isChecked = task.recurring && state.view === 'today' ? completedToday : task.completed;
       
-      // Determine if task can be dragged
-      const canDrag = !isSubtask && 
+      // Determine if task can be dragged (only top-level tasks)
+      const canDrag = level === 0 && 
                       state.view !== 'recurring' && 
                       state.view !== 'dueby' && 
                       !task.recurring && 
@@ -2574,15 +2669,16 @@
       return `
         <div>
           <div 
-            class="task-item ${isChecked ? 'completed' : ''} ${isSubtask ? 'subtask' : ''}"
+            class="task-item ${isChecked ? 'completed' : ''} ${level > 0 ? 'subtask' : ''}"
             data-task-id="${task.id}"
+            data-level="${level}"
             ${canDrag ? `draggable="true" ondragstart="startDrag(${task.id}, event)" ondragend="endDrag()"` : ''}
-            style="${canDrag ? 'cursor: move;' : ''}"
+            style="${canDrag ? 'cursor: move;' : ''} margin-left: ${level * 40}px;"
           >
             <input 
               type="checkbox" 
               ${isChecked ? 'checked' : ''} 
-              onchange="toggleTask(${task.id}, ${task.parentId || null}); this.blur(); return false;"
+              onchange="toggleTask(${task.id}, ${parentId}); this.blur(); return false;"
               style="pointer-events: auto;"
             />
             
@@ -2599,8 +2695,8 @@
                   id="edit-input-${task.id}"
                   value="${task.text}" 
                   style="background: var(--bg-secondary); color: var(--text-main); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 16px; width: 100%;"
-                  onkeypress="if(event.key === 'Enter') { updateTaskText(${task.id}, this.value, ${task.parentId || null}); }"
-                  onblur="updateTaskText(${task.id}, this.value, ${task.parentId || null})"
+                  onkeypress="if(event.key === 'Enter') { updateTaskText(${task.id}, this.value, ${parentId}); }"
+                  onblur="updateTaskText(${task.id}, this.value, ${parentId})"
                 />
               ` : `
                 ${task.text}
@@ -2643,38 +2739,38 @@
               <button class="icon-btn" onclick="state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; render()">
                 📅
               </button>
-              ${!isSubtask ? `
+              ${level === 0 ? `
                 <button class="icon-btn" onclick="state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; render()">
                   🔁
                 </button>
-                <button class="icon-btn" onclick="addTask(prompt('Add subtask:'), ${task.id})">
-                  ➕
-                </button>
               ` : ''}
+              <button class="icon-btn" onclick="addTask(prompt('Add subtask:'), ${task.id})" title="Add subtask">
+                ➕
+              </button>
               <button class="icon-btn" onclick="state.editingTask = ${task.id}; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0)">
                 ✏️
               </button>
-              <button class="icon-btn" onclick="duplicateTask(${task.id}, ${task.parentId || null})" title="Duplicate task">
+              <button class="icon-btn" onclick="duplicateTask(${task.id}, ${parentId})" title="Duplicate task">
                 📋
               </button>
-              <button class="icon-btn delete" onclick="deleteTask(${task.id}, ${task.parentId || null})">
+              <button class="icon-btn delete" onclick="deleteTask(${task.id}, ${parentId})">
                 🗑️
               </button>
             </div>
           </div>
           
           ${state.expandedDueDate === task.id ? `
-            <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main)">
+            <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main); margin-left: ${level * 40}px;">
               <label>Due Date</label>
               <input 
                 type="date" 
                 value="${task.dueDate || ''}" 
-                onchange="updateTaskDate(${task.id}, this.value || null, ${task.parentId || null})"
+                onchange="updateTaskDate(${task.id}, this.value || null, ${parentId})"
               />
             </div>
           ` : ''}
           
-          ${state.expandedRecurring === task.id && !isSubtask ? `
+          ${state.expandedRecurring === task.id && level === 0 ? `
             <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main)">
               <label>Recurring</label>
               <select onchange="updateTaskRecurring(${task.id}, this.value || null)" style="margin-bottom: 12px;">
@@ -2757,12 +2853,12 @@
           ` : ''}
           
           ${task.expanded && hasSubtasks ? `
-            <div style="margin-left: 40px;">
-              ${incompleteSubtasks.map(sub => renderTask(sub, true)).join('')}
+            <div>
+              ${incompleteSubtasks.map(sub => renderTask(sub, level + 1, task.id)).join('')}
               ${completedSubtasks.length > 0 ? `
-                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid ${state.darkMode === 'dark' ? '#404040' : '#d0d0d0'}; opacity: 0.7;">
+                <div style="margin-top: 12px; margin-left: ${(level + 1) * 40}px; padding-top: 8px; border-top: 1px solid ${state.darkMode === 'dark' ? '#404040' : '#d0d0d0'}; opacity: 0.7;">
                   <div style="font-size: 12px; margin-bottom: 8px;">Completed subtasks (${completedSubtasks.length})</div>
-                  ${completedSubtasks.map(sub => renderTask(sub, true)).join('')}
+                  ${completedSubtasks.map(sub => renderTask(sub, level + 1, task.id)).join('')}
                 </div>
               ` : ''}
             </div>
@@ -2852,6 +2948,7 @@
 
     // Efficiently update a single task by ID
     function updateTaskById(taskId, updates) {
+      // First try to find in top-level tasks
       const index = state.tasks.findIndex(t => t.id === taskId);
       if (index !== -1) {
         state.tasks[index] = { 
@@ -2859,22 +2956,23 @@
           ...updates,
           lastModified: new Date().toISOString() // Update timestamp for conflict resolution
         };
+        return;
       }
+      
+      // Not found at top level - search recursively in subtasks
+      state.tasks = updateTaskRecursive(state.tasks, taskId, {
+        ...updates,
+        lastModified: new Date().toISOString()
+      });
     }
 
-    // Efficiently update a subtask
+    // Efficiently update a subtask at any nesting level
     function updateSubtaskById(parentId, subtaskId, updates) {
-      const parentIndex = state.tasks.findIndex(t => t.id === parentId);
-      if (parentIndex !== -1) {
-        const subtaskIndex = state.tasks[parentIndex].subtasks.findIndex(s => s.id === subtaskId);
-        if (subtaskIndex !== -1) {
-          state.tasks[parentIndex].subtasks[subtaskIndex] = {
-            ...state.tasks[parentIndex].subtasks[subtaskIndex],
-            ...updates,
-            lastModified: new Date().toISOString() // Update timestamp for conflict resolution
-          };
-        }
-      }
+      // Use recursive update to find and update the subtask
+      state.tasks = updateTaskRecursive(state.tasks, subtaskId, {
+        ...updates,
+        lastModified: new Date().toISOString()
+      });
     }
 
     // Main render function
@@ -3804,6 +3902,20 @@
       const allDeletedIds = new Set([...localDeletedIds, ...driveDeletedIds]);
       
       console.log(`🗑️ Deleted IDs to filter out: ${Array.from(allDeletedIds).join(', ')}`);
+      console.log(`📊 MERGE DEBUG:`, {
+        localTasksCount: localTasks.length,
+        driveTasksCount: driveTasks.length,
+        localTasksWithSubtasks: localTasks.filter(t => t.subtasks && t.subtasks.length > 0).length,
+        driveTasksWithSubtasks: driveTasks.filter(t => t.subtasks && t.subtasks.length > 0).length
+      });
+      
+      // Log tasks with subtasks for debugging
+      localTasks.filter(t => t.subtasks && t.subtasks.length > 0).forEach(t => {
+        console.log(`📦 Local task with subtasks:`, { id: t.id, text: t.text, subtaskCount: t.subtasks.length });
+      });
+      driveTasks.filter(t => t.subtasks && t.subtasks.length > 0).forEach(t => {
+        console.log(`☁️ Drive task with subtasks:`, { id: t.id, text: t.text, subtaskCount: t.subtasks.length });
+      });
       
       // Add all drive tasks (excluding deleted ones)
       driveTasks.forEach(task => {
@@ -3831,17 +3943,33 @@
           const localTime = new Date(localTask.lastModified || 0);
           const driveTime = new Date(driveTask.lastModified || 0);
           
+          console.log(`⚖️ Comparing task ${localTask.id}:`, {
+            localTime: localTime.toISOString(),
+            driveTime: driveTime.toISOString(),
+            localNewer: localTime > driveTime,
+            localSubtasks: localTask.subtasks?.length || 0,
+            driveSubtasks: driveTask.subtasks?.length || 0
+          });
+          
           if (localTime > driveTime) {
             // Local version is newer
             merged.set(localTask.id, { ...localTask, source: 'local-newer' });
+            console.log(`✅ Using LOCAL version for task ${localTask.id}`);
           } else {
             // Drive version is newer or same - already in map
             merged.set(localTask.id, { ...driveTask, source: 'drive-newer' });
+            console.log(`✅ Using DRIVE version for task ${localTask.id}`);
           }
         }
       });
       
-      return Array.from(merged.values());
+      const result = Array.from(merged.values());
+      console.log(`✨ MERGE RESULT:`, {
+        totalTasks: result.length,
+        tasksWithSubtasks: result.filter(t => t.subtasks && t.subtasks.length > 0).length
+      });
+      
+      return result;
     }
     
     // Load from Google Drive
