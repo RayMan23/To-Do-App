@@ -856,64 +856,21 @@
     };
     
     // Scroll preservation using scrollIntoView (most reliable method)
-    let scrollAnchorId = null;
-    let scrollAnchorType = null; // 'task' or 'group'
+    let savedScrollTop = 0; // Simple pixel-based scroll position
     
     // Save which element is visible
     function saveScrollPosition() {
       const mainContent = document.querySelector('.main-content');
-      if (!mainContent) return;
-      
-      // Try to find a task first
-      const tasks = mainContent.querySelectorAll('[data-task-id]');
-      const containerRect = mainContent.getBoundingClientRect();
-      
-      for (let task of tasks) {
-        const rect = task.getBoundingClientRect();
-        
-        // Find first visible task
-        if (rect.top >= containerRect.top - 50 && rect.top <= containerRect.bottom) {
-          scrollAnchorId = task.getAttribute('data-task-id');
-          scrollAnchorType = 'task';
-          return;
-        }
-      }
-      
-      // If no task found, try groups
-      const groups = mainContent.querySelectorAll('[data-group]');
-      for (let group of groups) {
-        const rect = group.getBoundingClientRect();
-        
-        if (rect.top >= containerRect.top - 50 && rect.top <= containerRect.bottom) {
-          scrollAnchorId = group.getAttribute('data-group');
-          scrollAnchorType = 'group';
-          return;
-        }
+      if (mainContent) {
+        savedScrollTop = mainContent.scrollTop;
       }
     }
     
-    // Restore by scrolling the element back into view
+    // Restore scroll position after render
     function restoreScrollPosition() {
-      if (!scrollAnchorId) return;
-      
       const mainContent = document.querySelector('.main-content');
-      if (!mainContent) return;
-      
-      let anchorElement = null;
-      
-      if (scrollAnchorType === 'task') {
-        anchorElement = mainContent.querySelector(`[data-task-id="${scrollAnchorId}"]`);
-      } else if (scrollAnchorType === 'group') {
-        anchorElement = mainContent.querySelector(`[data-group="${scrollAnchorId}"]`);
-      }
-      
-      if (anchorElement) {
-        // Use scrollIntoView with specific options to maintain position
-        anchorElement.scrollIntoView({
-          behavior: 'instant',
-          block: 'start',
-          inline: 'nearest'
-        });
+      if (mainContent) {
+        mainContent.scrollTop = savedScrollTop;
       }
     }
     
@@ -3372,11 +3329,8 @@
         </div>
       `;
       
-      // Restore scroll positions after render
-      // Only restore if we have a scroll anchor (meaning we actually scrolled before render)
-      if (scrollAnchorId) {
-        restoreScrollPosition();
-      }
+      // Restore scroll position after render (ALWAYS)
+      restoreScrollPosition();
       
       // Restore settings modal scroll
       const newSettingsModal = document.querySelector('.modal');
