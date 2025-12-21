@@ -165,6 +165,7 @@
       min-width: 100px;
       max-width: 400px;
       padding: 16px;
+      padding-top: 72px; /* Space for hamburger button at top */
       padding-bottom: 100px; /* Extra padding for mobile OS navigation bars */
       display: flex;
       flex-direction: column;
@@ -665,7 +666,7 @@
     .hamburger-btn {
       position: absolute;
       top: 16px;
-      left: 16px;
+      left: calc(var(--sidebar-width) / 2 - 20px); /* Centered in sidebar area */
       width: 40px;
       height: 40px;
       display: flex;
@@ -673,13 +674,19 @@
       justify-content: center;
       align-items: center;
       gap: 6px;
-      background: var(--bg-secondary);
+      background: transparent;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      z-index: 100;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
       padding: 0;
+      z-index: 100;
+    }
+    
+    /* When sidebar is collapsed, position at left edge */
+    .hamburger-btn.collapsed {
+      left: 16px;
+      background: var(--bg-secondary);
     }
     
     .hamburger-btn:hover {
@@ -688,8 +695,8 @@
     }
     
     .hamburger-btn span {
-      width: 20px;
-      height: 2px;
+      width: 24px;
+      height: 3px;
       background: var(--text-main);
       border-radius: 2px;
       transition: all 0.2s ease;
@@ -869,6 +876,7 @@
       taskMap: new Map(), // O(1) task lookups
       view: 'today',
       showMenu: true,
+      sidebarCollapsed: false, // Track if sidebar is collapsed to hamburger only
       darkMode: 'dark',
       showSettings: false,
       showCountdown: true,
@@ -1081,6 +1089,16 @@
     // Toggle menu
     function toggleMenu() {
       state.showMenu = !state.showMenu;
+      // When toggling focus mode off, also expand sidebar
+      if (state.showMenu) {
+        state.sidebarCollapsed = false;
+      }
+      render();
+    }
+
+    // Toggle sidebar collapsed state (hamburger)
+    function toggleSidebarCollapse() {
+      state.sidebarCollapsed = !state.sidebarCollapsed;
       render();
     }
 
@@ -3029,16 +3047,14 @@
         <div class="app ${state.darkMode}-mode">
           ${!state.showSettings ? `<div class="click-layer" onclick="toggleMenu()"></div>` : ''}
           
-          
-          <!-- Hamburger Menu Button (shows when sidebar is hidden) -->
-          <button class="hamburger-btn ${state.showMenu ? 'hidden' : ''}" onclick="toggleMenu()">
+          <!-- Hamburger Menu Button (always outside sidebar) -->
+          <button class="hamburger-btn ${state.showMenu ? '' : 'hidden'} ${state.sidebarCollapsed ? 'collapsed' : ''}" onclick="toggleSidebarCollapse()">
             <span></span>
             <span></span>
             <span></span>
           </button>
-          <div class="sidebar ${state.showMenu ? '' : 'hidden'}">
-            <h1>Tasks</h1>
-            
+          
+          <div class="sidebar ${state.showMenu && !state.sidebarCollapsed ? '' : 'hidden'}">`
             <nav style="flex: 1">
               <button 
                 class="nav-btn ${state.view === 'today' ? 'active' : ''}" 
