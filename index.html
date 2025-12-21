@@ -1776,18 +1776,25 @@
 
     // Update task date
     function updateTaskDate(taskId, dueDate, parentId = null) {
+      // Debug logging
+      console.log('📅 updateTaskDate called:', { taskId, dueDate, parentId });
+      
+      // Handle empty string from date input (user cleared the date)
+      const cleanDate = dueDate && dueDate.trim() !== '' ? dueDate : null;
+      console.log('📅 cleanDate after processing:', cleanDate);
+      
       if (parentId) {
         // Updating a subtask's due date
         state.tasks = state.tasks.map(task => {
           if (task.id === parentId) {
             // Update the subtask
             const updatedSubtasks = task.subtasks.map(sub =>
-              sub.id === taskId ? { ...sub, dueDate } : sub
+              sub.id === taskId ? { ...sub, dueDate: cleanDate } : sub
             );
             
             // If parent doesn't have a due date, set it to the earliest subtask due date
             let parentDueDate = task.dueDate;
-            if (!parentDueDate && dueDate) {
+            if (!parentDueDate && cleanDate) {
               // Find the earliest due date among subtasks
               const subtaskDueDates = updatedSubtasks
                 .map(sub => sub.dueDate)
@@ -1806,9 +1813,14 @@
       } else {
         // Updating a parent task's due date
         state.tasks = state.tasks.map(task =>
-          task.id === taskId ? { ...task, dueDate } : task
+          task.id === taskId ? { ...task, dueDate: cleanDate } : task
         );
       }
+      
+      // Verify the date was saved
+      const updatedTask = state.tasks.find(t => t.id === taskId) || 
+                         state.tasks.find(t => t.subtasks?.some(s => s.id === taskId));
+      console.log('📅 Task after update:', updatedTask);
       
       triggerSync(); // Event-based sync
       render();
@@ -2204,9 +2216,13 @@
         const dueDate = new Date(task.dueDate);
         dueDate.setHours(0, 0, 0, 0); // Normalize to midnight
         
+        // Compare using date strings for reliability
+        const dueDateStr = dueDate.toDateString();
+        const todayStr = today.toDateString();
+        
         // Show if overdue (before today) OR future (after today)
         // Exclude tasks due exactly today (those appear in Today view)
-        return dueDate.getTime() !== today.getTime();
+        return dueDateStr !== todayStr;
       }
 
       // Recurring view
@@ -2238,12 +2254,24 @@
           const dueDate = new Date(task.dueDate);
           dueDate.setHours(0, 0, 0, 0); // Normalize to midnight for date-only comparison
           
+          // Compare dates using date strings for more reliable comparison
+          const dueDateStr = dueDate.toDateString();
+          const todayStr = today.toDateString();
+          
+          console.log('🔍 Date comparison:', { 
+            taskId: task.id, 
+            dueDate: task.dueDate, 
+            dueDateStr, 
+            todayStr,
+            match: dueDateStr === todayStr
+          });
+          
           // CHANGED: Only show tasks due TODAY and future (not overdue)
           // Overdue tasks now appear in Due By view instead
-          if (dueDate < today) return false; // Exclude overdue tasks
+          if (dueDate < today && dueDateStr !== todayStr) return false; // Exclude overdue tasks
           
           // Show tasks due today
-          if (dueDate.getTime() === today.getTime()) return true;
+          if (dueDateStr === todayStr) return true;
           
           // For future dates, check days ahead setting
           const daysAhead = getDaysAheadForList(task.createdIn || VIEWS.TODAY);
@@ -2258,11 +2286,14 @@
               const subDueDate = new Date(subtask.dueDate);
               subDueDate.setHours(0, 0, 0, 0); // Normalize to midnight
               
+              const subDueDateStr = subDueDate.toDateString();
+              const todayStr = today.toDateString();
+              
               // CHANGED: Exclude overdue subtasks (they appear in Due By view)
-              if (subDueDate < today) return false;
+              if (subDueDate < today && subDueDateStr !== todayStr) return false;
               
               // Show if subtask due today
-              if (subDueDate.getTime() === today.getTime()) return true;
+              if (subDueDateStr === todayStr) return true;
               
               // For future dates, check days ahead setting
               const daysAhead = getDaysAheadForList(task.createdIn || 'today');
@@ -2647,7 +2678,7 @@
               <input 
                 type="date" 
                 value="${task.dueDate || ''}" 
-                onchange="updateTaskDate(${task.id}, this.value, ${task.parentId || null})"
+                onchange="updateTaskDate(${task.id}, this.value || null, ${task.parentId || null})"
               />
             </div>
           ` : ''}
