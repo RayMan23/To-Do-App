@@ -2839,6 +2839,11 @@
 
     // Main render function
     function render() {
+      // Preserve input field value and focus before render (CRITICAL FIX)
+      const newTaskInput = document.getElementById('new-task-input');
+      const preservedInputValue = newTaskInput ? newTaskInput.value : '';
+      const hadFocus = newTaskInput && document.activeElement === newTaskInput;
+      
       // Sync task map before rendering
       syncTaskMap();
       
@@ -3379,6 +3384,22 @@
         newSettingsModal.scrollTop = savedModalScroll;
       }
       
+      // Restore input field value and focus (CRITICAL FIX)
+      if (preservedInputValue || hadFocus) {
+        const restoredInput = document.getElementById('new-task-input');
+        if (restoredInput) {
+          if (preservedInputValue) {
+            restoredInput.value = preservedInputValue;
+          }
+          if (hadFocus) {
+            // Restore focus and cursor position
+            restoredInput.focus();
+            // Put cursor at end of text
+            restoredInput.setSelectionRange(preservedInputValue.length, preservedInputValue.length);
+          }
+        }
+      }
+      
       // Mark DOM as initialized after first render
       if (!state.domInitialized) {
         state.domInitialized = true;
@@ -3701,7 +3722,7 @@
           lastSyncTime = new Date();
           hasUnsyncedChanges = false; // Clear flag after successful sync
           console.log('✅ Saved to Drive:', new Date().toLocaleTimeString());
-          render(); // Update UI to show last sync time
+          // No need to render - we just saved data, didn't change it
           
           // Trigger 1: After-save check - check for updates from other devices 10s later
           setTimeout(() => {
@@ -3819,6 +3840,9 @@
           console.log(`📊 Merging: ${localTasks.length} local tasks + ${driveTasks.length} drive tasks`);
           console.log(`🗑️ Deletions: ${localDeletedIds.length} local + ${driveDeletedIds.length} drive`);
           
+          // Remember current state to detect changes
+          const taskCountBefore = localTasks.length;
+          
           // Merge tasks intelligently (task-level conflict resolution + deletion tracking)
           state.tasks = mergeTasks(localTasks, driveTasks, localDeletedIds, driveDeletedIds);
           
@@ -3829,6 +3853,11 @@
           if (state.deletedTaskIds.length > 100) {
             state.deletedTaskIds = state.deletedTaskIds.slice(-100);
           }
+          
+          // Detect if data actually changed
+          const taskCountAfter = state.tasks.length;
+          const dataChanged = taskCountBefore !== taskCountAfter || 
+                             localDeletedIds.length !== state.deletedTaskIds.length;
           
           console.log(`✅ Result: ${state.tasks.length} tasks after merge`);
           console.log(`🗑️ Tracking ${state.deletedTaskIds.length} deleted task IDs`);
@@ -3854,8 +3883,15 @@
           
           syncTaskMap();
           saveState(); // Save to localStorage too
-          state.domInitialized = false; // Force re-render
-          render();
+          
+          // Only render if data actually changed (prevents scroll jump while typing)
+          if (dataChanged) {
+            state.domInitialized = false; // Force re-render
+            render();
+            console.log('🔄 UI updated (data changed)');
+          } else {
+            console.log('✨ No UI update needed (data unchanged)');
+          }
           
           lastSyncTime = new Date();
           hasUnsyncedChanges = false; // We're now in sync with Drive
