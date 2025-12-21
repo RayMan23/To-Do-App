@@ -3934,7 +3934,7 @@
     function mergeTasks(localTasks, driveTasks, localDeletedIds = [], driveDeletedIds = []) {
       const merged = new Map();
       
-      // Combine all deleted IDs from both sources
+      // Combine all deleted IDs from both sources a
       const allDeletedIds = new Set([...localDeletedIds, ...driveDeletedIds]);
       
       console.log(`🗑️ Deleted IDs to filter out: ${Array.from(allDeletedIds).join(', ')}`);
