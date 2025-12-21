@@ -660,6 +660,44 @@
       color: var(--text-primary);
       white-space: nowrap;
     }
+    
+    /* Hamburger Menu Button */
+    .hamburger-btn {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-secondary);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 100;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+    
+    .hamburger-btn:hover {
+      background: var(--bg-input);
+      transform: scale(1.05);
+    }
+    
+    .hamburger-btn span {
+      width: 20px;
+      height: 2px;
+      background: var(--text-main);
+      border-radius: 2px;
+      transition: all 0.2s ease;
+    }
+    
+    .hamburger-btn.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -1556,7 +1594,10 @@
     }
     
     // Update task text content
-    function updateTaskText(taskId, newText) {
+    // ===== DOM UPDATE HELPER (for incremental rendering) =====
+    // Updates task text directly in the DOM without full page re-render
+    // Used for performance optimization when only text changes
+    function updateTaskTextInDOM(taskId, newText) {
       const taskElement = findTaskElement(taskId);
       if (!taskElement) return;
       
@@ -1850,6 +1891,7 @@
     }
 
     // Update task date
+    // Update task due date - WORKS AT ANY NESTING LEVEL
     function updateTaskDate(taskId, dueDate, parentId = null) {
       // Debug logging
       console.log('📅 updateTaskDate called:', { taskId, dueDate, parentId });
@@ -1858,43 +1900,14 @@
       const cleanDate = dueDate && dueDate.trim() !== '' ? dueDate : null;
       console.log('📅 cleanDate after processing:', cleanDate);
       
-      if (parentId) {
-        // Updating a subtask's due date
-        state.tasks = state.tasks.map(task => {
-          if (task.id === parentId) {
-            // Update the subtask
-            const updatedSubtasks = task.subtasks.map(sub =>
-              sub.id === taskId ? { ...sub, dueDate: cleanDate } : sub
-            );
-            
-            // If parent doesn't have a due date, set it to the earliest subtask due date
-            let parentDueDate = task.dueDate;
-            if (!parentDueDate && cleanDate) {
-              // Find the earliest due date among subtasks
-              const subtaskDueDates = updatedSubtasks
-                .map(sub => sub.dueDate)
-                .filter(d => d)
-                .sort();
-              
-              if (subtaskDueDates.length > 0) {
-                parentDueDate = subtaskDueDates[0];
-              }
-            }
-            
-            return { ...task, subtasks: updatedSubtasks, dueDate: parentDueDate };
-          }
-          return task;
-        });
-      } else {
-        // Updating a parent task's due date
-        state.tasks = state.tasks.map(task =>
-          task.id === taskId ? { ...task, dueDate: cleanDate } : task
-        );
-      }
+      // Use recursive update to find and update task at any nesting level
+      state.tasks = updateTaskRecursive(state.tasks, taskId, {
+        dueDate: cleanDate,
+        lastModified: new Date().toISOString()
+      });
       
       // Verify the date was saved
-      const updatedTask = state.tasks.find(t => t.id === taskId) || 
-                         state.tasks.find(t => t.subtasks?.some(s => s.id === taskId));
+      const updatedTask = findTaskRecursive(state.tasks, taskId);
       console.log('📅 Task after update:', updatedTask);
       
       triggerSync(); // Event-based sync
@@ -3016,6 +3029,13 @@
         <div class="app ${state.darkMode}-mode">
           ${!state.showSettings ? `<div class="click-layer" onclick="toggleMenu()"></div>` : ''}
           
+          
+          <!-- Hamburger Menu Button (shows when sidebar is hidden) -->
+          <button class="hamburger-btn ${state.showMenu ? 'hidden' : ''}" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
           <div class="sidebar ${state.showMenu ? '' : 'hidden'}">
             <h1>Tasks</h1>
             
