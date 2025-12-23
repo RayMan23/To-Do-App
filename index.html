@@ -1722,7 +1722,6 @@
     // Toggle task completion (handles recurring tasks specially)
     async function toggleTask(taskId, parentId = null, fromView = null) {
       const task = state.taskMap.get(taskId);
-      const useIncremental = shouldUseIncrementalUpdate();
       
       if (task && task.recurring && !task.recurringPaused) {
         // Recurring task in today, notepad, projects, or custom list - just log completion for today
@@ -1748,12 +1747,8 @@
           
           triggerSync(); // Event-based sync
           
-          // Incremental update for recurring tasks - just update checkbox state
-          if (useIncremental) {
-            updateTaskElementState(taskId, isCompletingToday);
-          } else {
-            render();
-          }
+          // ALWAYS use full render for recurring tasks to ensure completion records appear
+          render();
           return;
         }
         
@@ -1763,19 +1758,15 @@
           updateTaskById(taskId, { recurringPaused: true, completed: true });
           triggerSync(); // Event-based sync
           
-          // Incremental update: remove from DOM
-          if (useIncremental) {
-            removeTaskElement(taskId);
-          } else {
-            render();
-          }
+          // Use full render to remove from recurring view
+          render();
           return;
         }
       }
       
       // Normal completion for non-recurring tasks or subtasks
       if (parentId) {
-        // SUBTASK - also needs to move between sections, use full render
+        // SUBTASK - always use full render to move between sections
         const parent = state.taskMap.get(parentId);
         const subtask = parent?.subtasks.find(s => s.id === taskId);
         if (subtask) {
@@ -1795,11 +1786,10 @@
           triggerSync(); // Event-based sync
           
           // Use full render to properly handle subtask section movement
-          // (incomplete subtasks vs completed subtasks sections)
           render();
         }
       } else {
-        // MAIN TASK - use full render to handle section movement properly
+        // MAIN TASK - always use full render to move between sections
         const wasCompleted = task.completed;
         
         // Only celebrate if completing (not uncompleting)
@@ -1816,7 +1806,6 @@
         triggerSync(); // Event-based sync
         
         // Use full render for main tasks to properly handle completed/incomplete section movement
-        // and ensure proper visual feedback
         render();
       }
     }
@@ -1910,6 +1899,7 @@
 
     // Update task date
     // Update task due date - WORKS AT ANY NESTING LEVEL
+    // Also bubbles earliest subtask date up to parent
     function updateTaskDate(taskId, dueDate, parentId = null) {
       // Debug logging
       console.log('📅 updateTaskDate called:', { taskId, dueDate, parentId });
@@ -1923,6 +1913,54 @@
         dueDate: cleanDate,
         lastModified: new Date().toISOString()
       });
+      
+      // BUBBLE UP: If setting a subtask date, update parent ONLY if parent has no date
+      // This preserves any manually set parent dates
+      if (cleanDate) {
+        const updatedTask = findTaskRecursive(state.tasks, taskId);
+        
+        // Find the parent task recursively
+        const findParent = (tasks, targetId) => {
+          for (const task of tasks) {
+            if (task.subtasks && task.subtasks.some(sub => sub.id === targetId)) {
+              return task;
+            }
+            if (task.subtasks) {
+              const found = findParent(task.subtasks, targetId);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        const parentTask = findParent(state.tasks, taskId);
+        
+        // ONLY update parent if it has NO date already
+        if (parentTask && parentTask.subtasks && !parentTask.dueDate) {
+          // Get all subtask due dates
+          const getAllSubtaskDates = (subtasks) => {
+            let dates = [];
+            for (const sub of subtasks) {
+              if (sub.dueDate) dates.push(sub.dueDate);
+              if (sub.subtasks) {
+                dates = dates.concat(getAllSubtaskDates(sub.subtasks));
+              }
+            }
+            return dates;
+          };
+          
+          const allSubtaskDates = getAllSubtaskDates(parentTask.subtasks);
+          
+          // Set parent to earliest subtask date (only if parent has no date)
+          if (allSubtaskDates.length > 0) {
+            const earliestDate = allSubtaskDates.sort()[0];
+            state.tasks = updateTaskRecursive(state.tasks, parentTask.id, {
+              dueDate: earliestDate,
+              lastModified: new Date().toISOString()
+            });
+          }
+        }
+      }
       
       // Verify the date was saved
       const updatedTask = findTaskRecursive(state.tasks, taskId);
@@ -3934,7 +3972,7 @@
     function mergeTasks(localTasks, driveTasks, localDeletedIds = [], driveDeletedIds = []) {
       const merged = new Map();
       
-      // Combine all deleted IDs from both sources a
+      // Combine all deleted IDs from both sources
       const allDeletedIds = new Set([...localDeletedIds, ...driveDeletedIds]);
       
       console.log(`🗑️ Deleted IDs to filter out: ${Array.from(allDeletedIds).join(', ')}`);
@@ -4063,7 +4101,7 @@
           console.log(`✅ Result: ${state.tasks.length} tasks after merge`);
           console.log(`🗑️ Tracking ${state.deletedTaskIds.length} deleted task IDs`);
           
-          // Settings: always use Drive version (these are unlikely to conflict)
+          // Settings: merge intelligently
           if (data.settings) {
             state.darkMode = data.settings.darkMode || 'dark';
             state.showCountdown = data.settings.showCountdown !== false;
@@ -4072,7 +4110,20 @@
             state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
             state.reverseSortOrder = data.reverseSortOrder || {};
             state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
-            state.customLists = data.settings.customLists || [];
+            
+            // MERGE customLists: keep union of local + drive lists (by ID)
+            const localCustomLists = state.customLists || [];
+            const driveCustomLists = data.settings.customLists || [];
+            const mergedListsMap = new Map();
+            
+            // Add drive lists first
+            driveCustomLists.forEach(list => mergedListsMap.set(list.id, list));
+            
+            // Add local lists (will overwrite if same ID exists)
+            localCustomLists.forEach(list => mergedListsMap.set(list.id, list));
+            
+            state.customLists = Array.from(mergedListsMap.values());
+            
             state.listDaysAhead = data.settings.listDaysAhead || {};
           }
           
