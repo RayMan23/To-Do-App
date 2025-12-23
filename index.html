@@ -1914,12 +1914,10 @@
         lastModified: new Date().toISOString()
       });
       
-      // BUBBLE UP: If setting a subtask date, update parent ONLY if parent has no date
+      // BUBBLE UP: Recursively update parents up the chain if they have no date
       // This preserves any manually set parent dates
       if (cleanDate) {
-        const updatedTask = findTaskRecursive(state.tasks, taskId);
-        
-        // Find the parent task recursively
+        // Helper to find parent of a task
         const findParent = (tasks, targetId) => {
           for (const task of tasks) {
             if (task.subtasks && task.subtasks.some(sub => sub.id === targetId)) {
@@ -1933,33 +1931,42 @@
           return null;
         };
         
-        const parentTask = findParent(state.tasks, taskId);
-        
-        // ONLY update parent if it has NO date already
-        if (parentTask && parentTask.subtasks && !parentTask.dueDate) {
-          // Get all subtask due dates
-          const getAllSubtaskDates = (subtasks) => {
-            let dates = [];
-            for (const sub of subtasks) {
-              if (sub.dueDate) dates.push(sub.dueDate);
-              if (sub.subtasks) {
-                dates = dates.concat(getAllSubtaskDates(sub.subtasks));
-              }
+        // Helper to get all nested subtask dates
+        const getAllSubtaskDates = (subtasks) => {
+          let dates = [];
+          for (const sub of subtasks) {
+            if (sub.dueDate) dates.push(sub.dueDate);
+            if (sub.subtasks) {
+              dates = dates.concat(getAllSubtaskDates(sub.subtasks));
             }
-            return dates;
-          };
-          
-          const allSubtaskDates = getAllSubtaskDates(parentTask.subtasks);
-          
-          // Set parent to earliest subtask date (only if parent has no date)
-          if (allSubtaskDates.length > 0) {
-            const earliestDate = allSubtaskDates.sort()[0];
-            state.tasks = updateTaskRecursive(state.tasks, parentTask.id, {
-              dueDate: earliestDate,
-              lastModified: new Date().toISOString()
-            });
           }
-        }
+          return dates;
+        };
+        
+        // Recursive function to bubble up through all parent levels
+        const bubbleUpToParents = (currentTaskId) => {
+          const parentTask = findParent(state.tasks, currentTaskId);
+          
+          if (parentTask && parentTask.subtasks && !parentTask.dueDate) {
+            // Parent has no date - update it with earliest subtask date
+            const allSubtaskDates = getAllSubtaskDates(parentTask.subtasks);
+            
+            if (allSubtaskDates.length > 0) {
+              const earliestDate = allSubtaskDates.sort()[0];
+              state.tasks = updateTaskRecursive(state.tasks, parentTask.id, {
+                dueDate: earliestDate,
+                lastModified: new Date().toISOString()
+              });
+              
+              // Continue bubbling up to the parent's parent (grandparent)
+              bubbleUpToParents(parentTask.id);
+            }
+          }
+          // If parent has a date, stop bubbling (preserves manual dates)
+        };
+        
+        // Start the recursive bubble-up from the task we just updated
+        bubbleUpToParents(taskId);
       }
       
       // Verify the date was saved
