@@ -1745,6 +1745,9 @@
             });
           }
           
+          // CRITICAL: Force taskMap sync BEFORE rendering
+          syncTaskMap();
+          
           triggerSync(); // Event-based sync
           
           // ALWAYS use full render for recurring tasks to ensure completion records appear
@@ -1756,6 +1759,10 @@
         if (state.view === 'recurring') {
           await celebrateCompletion(taskId);
           updateTaskById(taskId, { recurringPaused: true, completed: true });
+          
+          // CRITICAL: Force taskMap sync BEFORE rendering
+          syncTaskMap();
+          
           triggerSync(); // Event-based sync
           
           // Use full render to remove from recurring view
@@ -1783,6 +1790,9 @@
           };
           updateSubtaskById(parentId, taskId, updates);
           
+          // CRITICAL: Force taskMap sync BEFORE rendering
+          syncTaskMap();
+          
           triggerSync(); // Event-based sync
           
           // Use full render to properly handle subtask section movement
@@ -1802,6 +1812,9 @@
           completedAt: !wasCompleted ? new Date().toISOString() : null
         };
         updateTaskById(taskId, updates);
+        
+        // CRITICAL: Force taskMap sync BEFORE rendering
+        syncTaskMap();
         
         triggerSync(); // Event-based sync
         
