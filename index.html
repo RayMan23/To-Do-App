@@ -2894,7 +2894,11 @@
                 onchange="toggleTask(${task.id}, ${parentId}); this.blur(); return false;"
                 style="pointer-events: auto;"
               />
-            ` : ''}
+            ` : `
+              <span style="width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; opacity: 0.3; font-size: ${level > 0 ? '10px' : '14px'}; user-select: none;">
+                ${level > 0 ? '·' : '•'}
+              </span>
+            `}
             
             ${hasSubtasks ? `
               <button class="expand-btn" onclick="toggleExpanded(${task.id})" style="pointer-events: auto;">
