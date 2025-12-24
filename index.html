@@ -992,7 +992,12 @@
       draggingTask: null, // Track which task is being dragged
       expandedGroups: {}, // Track which groups are expanded in recurring/dueby views
       listDaysAhead: {}, // Map of list ID to number of days ahead (default 7)
-      domInitialized: false // Track if initial DOM render is complete
+      domInitialized: false, // Track if initial DOM render is complete
+      // Temporary state for pending changes (applied when "Done" is clicked)
+      tempDueDate: null,
+      tempRecurring: null,
+      tempRecurringDays: null,
+      tempRecurringMonthly: null
     };
     
     // Scroll preservation using scrollIntoView (most reliable method)
@@ -2098,6 +2103,18 @@
       render();
     }
 
+    // Apply pending due date changes and close panel
+    function applyDueDateChanges(taskId, parentId) {
+      if (state.tempDueDate !== null) {
+        // Convert empty string to null
+        const dateValue = state.tempDueDate === '' ? null : state.tempDueDate;
+        updateTaskDate(taskId, dateValue, parentId);
+      }
+      state.tempDueDate = null;
+      state.expandedDueDate = null;
+      render();
+    }
+
     // Update task recurring
     function updateTaskRecurring(taskId, recurring) {
       const task = state.taskMap.get(taskId);
@@ -2139,6 +2156,57 @@
     function updateMonthlyRecurrence(taskId, value) {
       updateTaskById(taskId, { recurringMonthly: value });
       triggerSync(); // Event-based sync
+      render();
+    }
+
+    // Toggle temporary recurring day (for pending changes)
+    function toggleTempRecurringDay(taskId, day) {
+      const task = state.taskMap.get(taskId);
+      if (task) {
+        // Initialize temp state if not set
+        if (state.tempRecurringDays === null) {
+          state.tempRecurringDays = [...(task.recurringDays || [])];
+        }
+        
+        if (state.tempRecurringDays.includes(day)) {
+          state.tempRecurringDays = state.tempRecurringDays.filter(d => d !== day);
+        } else {
+          state.tempRecurringDays = [...state.tempRecurringDays, day].sort();
+        }
+        render();
+      }
+    }
+
+    // Apply pending recurring changes and close panel
+    function applyRecurringChanges(taskId) {
+      const task = state.taskMap.get(taskId);
+      if (!task) return;
+      
+      // Apply recurring type change
+      if (state.tempRecurring !== null) {
+        const recurringValue = state.tempRecurring === '' ? null : state.tempRecurring;
+        if (recurringValue !== task.recurring) {
+          updateTaskRecurring(taskId, recurringValue);
+        }
+      }
+      
+      // Apply recurring days change
+      if (state.tempRecurringDays !== null) {
+        updateTaskById(taskId, { recurringDays: state.tempRecurringDays });
+      }
+      
+      // Apply monthly recurrence change
+      if (state.tempRecurringMonthly !== null) {
+        updateTaskById(taskId, { recurringMonthly: state.tempRecurringMonthly });
+      }
+      
+      // Clear temp state
+      state.tempRecurring = null;
+      state.tempRecurringDays = null;
+      state.tempRecurringMonthly = null;
+      state.expandedRecurring = null;
+      
+      triggerSync();
       render();
     }
 
@@ -2954,11 +3022,11 @@
             </span>
             
             <div class="task-actions">
-              <button class="icon-btn" onclick="state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; render()">
+              <button class="icon-btn" onclick="if (state.expandedDueDate !== ${task.id}) { state.tempDueDate = ${task.dueDate ? `'${task.dueDate}'` : 'null'}; } state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; render()">
                 📅
               </button>
               ${level === 0 ? `
-                <button class="icon-btn" onclick="state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; render()">
+                <button class="icon-btn" onclick="if (state.expandedRecurring !== ${task.id}) { state.tempRecurring = ${task.recurring ? `'${task.recurring}'` : 'null'}; state.tempRecurringDays = null; state.tempRecurringMonthly = null; } state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; render()">
                   🔁
                 </button>
               ` : ''}
@@ -2985,47 +3053,57 @@
               <label>Due Date</label>
               <input 
                 type="date" 
-                value="${task.dueDate || ''}" 
-                onchange="updateTaskDate(${task.id}, this.value || null, ${parentId})"
+                value="${state.tempDueDate !== null ? state.tempDueDate : (task.dueDate || '')}" 
+                onchange="state.tempDueDate = this.value || ''; render();"
               />
+              <button 
+                onclick="applyDueDateChanges(${task.id}, ${parentId})" 
+                class="btn" 
+                style="margin-top: 12px; width: 100%; padding: 8px; background: var(--text-blue); color: white;"
+              >
+                Done
+              </button>
             </div>
           ` : ''}
           
           ${state.expandedRecurring === task.id && level === 0 ? `
             <div class="task-options" style="background: var(--bg-secondary); color: var(--text-main)">
               <label>Recurring</label>
-              <select onchange="updateTaskRecurring(${task.id}, this.value || null)" style="margin-bottom: 12px;">
-                <option value="" ${!task.recurring ? 'selected' : ''}>None</option>
-                <option value="daily" ${task.recurring === 'daily' ? 'selected' : ''}>Daily</option>
-                <option value="weekdays" ${task.recurring === 'weekdays' ? 'selected' : ''}>Weekdays</option>
-                <option value="weekends" ${task.recurring === 'weekends' ? 'selected' : ''}>Weekends</option>
-                <option value="weekly" ${task.recurring === 'weekly' ? 'selected' : ''}>Weekly</option>
-                <option value="monthly" ${task.recurring === 'monthly' ? 'selected' : ''}>Monthly</option>
+              <select onchange="state.tempRecurring = this.value || null; state.tempRecurringDays = null; state.tempRecurringMonthly = null; render();" style="margin-bottom: 12px;">
+                <option value="" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === null || (state.tempRecurring !== null ? state.tempRecurring : task.recurring) === '' ? 'selected' : ''}>None</option>
+                <option value="daily" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'daily' ? 'selected' : ''}>Daily</option>
+                <option value="weekdays" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'weekdays' ? 'selected' : ''}>Weekdays</option>
+                <option value="weekends" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'weekends' ? 'selected' : ''}>Weekends</option>
+                <option value="weekly" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'weekly' ? 'selected' : ''}>Weekly</option>
+                <option value="monthly" ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'monthly' ? 'selected' : ''}>Monthly</option>
               </select>
               
-              ${task.recurring === 'daily' ? `
+              ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'daily' ? `
                 <label style="margin-top: 8px;">Recurs on:</label>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => `
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
+                    const currentDays = state.tempRecurringDays !== null ? state.tempRecurringDays : (task.recurringDays || []);
+                    return `
                     <button 
-                      onclick="toggleRecurringDay(${task.id}, ${i})"
-                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                      onclick="toggleTempRecurringDay(${task.id}, ${i})"
+                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${currentDays.includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
                     >
                       ${day}
                     </button>
-                  `).join('')}
+                  `}).join('')}
                 </div>
               ` : ''}
               
-              ${task.recurring === 'weekdays' ? `
+              ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'weekdays' ? `
                 <label style="margin-top: 8px;">Work days:</label>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
                   ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
                     if (!state.workDays.includes(i)) return '';
+                    const currentDays = state.tempRecurringDays !== null ? state.tempRecurringDays : (task.recurringDays || []);
                     return `
                       <button 
-                        onclick="toggleRecurringDay(${task.id}, ${i})"
-                        style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                        onclick="toggleTempRecurringDay(${task.id}, ${i})"
+                        style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${currentDays.includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
                       >
                         ${day}
                       </button>
@@ -3034,29 +3112,31 @@
                 </div>
               ` : ''}
               
-              ${task.recurring === 'weekly' ? `
+              ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'weekly' ? `
                 <label style="margin-top: 8px;">Recurs on:</label>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => `
+                  ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
+                    const currentDays = state.tempRecurringDays !== null ? state.tempRecurringDays : (task.recurringDays || []);
+                    return `
                     <button 
-                      onclick="toggleRecurringDay(${task.id}, ${i})"
-                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${(task.recurringDays || []).includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
+                      onclick="toggleTempRecurringDay(${task.id}, ${i})"
+                      style="padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${currentDays.includes(i) ? (state.darkMode === 'dark' ? '#404040' : '#d0d0d0') : (state.darkMode === 'dark' ? '#1a1a1a' : '#f5f5f5')}; color: var(--text-main)"
                     >
                       ${day}
                     </button>
-                  `).join('')}
+                  `}).join('')}
                 </div>
               ` : ''}
               
-              ${task.recurring === 'monthly' ? `
+              ${(state.tempRecurring !== null ? state.tempRecurring : task.recurring) === 'monthly' ? `
                 <label style="margin-top: 8px;">Day of month:</label>
                 <input 
                   type="number" 
                   min="1" 
                   max="31" 
-                  value="${task.recurringMonthly || ''}" 
+                  value="${state.tempRecurringMonthly !== null ? state.tempRecurringMonthly : (task.recurringMonthly || '')}" 
                   placeholder="e.g., 15"
-                  onchange="updateMonthlyRecurrence(${task.id}, this.value)"
+                  onchange="state.tempRecurringMonthly = this.value; render();"
                   style="width: 100%; margin-top: 4px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main); font-size: 14px;"
                 />
                 <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">
@@ -3064,12 +3144,19 @@
                 </div>
                 <input 
                   type="text" 
-                  value="${isNaN(task.recurringMonthly) ? task.recurringMonthly || '' : ''}" 
+                  value="${state.tempRecurringMonthly !== null ? (isNaN(state.tempRecurringMonthly) ? state.tempRecurringMonthly : '') : (isNaN(task.recurringMonthly) ? task.recurringMonthly || '' : '')}" 
                   placeholder="e.g., 2nd Tuesday"
-                  onchange="updateMonthlyRecurrence(${task.id}, this.value)"
+                  onchange="state.tempRecurringMonthly = this.value; render();"
                   style="width: 100%; margin-top: 4px; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main); font-size: 14px;"
                 />
               ` : ''}
+              <button 
+                onclick="applyRecurringChanges(${task.id})" 
+                class="btn" 
+                style="margin-top: 16px; width: 100%; padding: 8px; background: var(--text-blue); color: white;"
+              >
+                Done
+              </button>
             </div>
           ` : ''}
           
