@@ -165,7 +165,7 @@
       min-width: 100px;
       max-width: 400px;
       padding: 16px;
-      padding-top: 72px; /* Space for hamburger button at top */
+      padding-top: 88px; /* Space for hamburger: 32px top + 40px height + 16px spacing = 88px */
       padding-bottom: 100px; /* Extra padding for mobile OS navigation bars */
       display: flex;
       flex-direction: column;
@@ -242,6 +242,7 @@
       gap: 8px;
       margin-bottom: 24px;
       pointer-events: auto;
+      transition: margin-left 0.3s ease;
     }
 
     .add-task-form.hidden {
@@ -254,6 +255,61 @@
       border-radius: 6px;
       border: 1px solid;
       font-size: 16px;
+    }
+    
+    /* When sidebar is collapsed, add left margin to prevent overlap with hamburger */
+    .hamburger-btn.collapsed ~ * .add-task-form,
+    .app:has(.hamburger-btn.collapsed) .add-task-form {
+      margin-left: 64px; /* Hamburger at 16px + 40px width + 8px gap = 64px */
+    }
+    
+    /* On mobile/tablet, when sidebar is open, add left margin to prevent overlap with hamburger */
+    @media (max-width: 768px) {
+      .app.sidebar-open .main-content {
+        margin-left: calc(var(--sidebar-width) + 8px); /* Sidebar width + 8px gap */
+        transition: margin-left 0.3s ease;
+      }
+      
+      /* Reset the add-task-form margin when sidebar is open (since main-content already has margin) */
+      .app.sidebar-open .add-task-form {
+        margin-left: 0;
+      }
+    }
+    
+    /* On very narrow screens, adjust sizing */
+    @media (max-width: 400px) {
+      .add-task-form input {
+        font-size: 14px;
+        padding: 10px 12px;
+      }
+      
+      .btn {
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      
+      .hamburger-btn {
+        width: 36px;
+        height: 36px;
+        top: 25px; /* Adjusted UP for center alignment with smaller input */
+      }
+      
+      .hamburger-btn span {
+        width: 20px;
+      }
+      
+      .main-content {
+        padding: 24px 16px;
+      }
+      
+      .sidebar {
+        padding-top: 77px; /* 25px + 36px + 16px = 77px for smaller hamburger */
+      }
+      
+      /* Adjust collapsed margin for smaller hamburger */
+      .app:has(.hamburger-btn.collapsed) .add-task-form {
+        margin-left: 52px; /* 16px + 36px + 8px gap for smaller hamburger */
+      }
     }
 
     .btn {
@@ -665,10 +721,11 @@
     /* Hamburger Menu Button */
     .hamburger-btn {
       position: absolute;
-      top: 16px;
+      top: 32px; /* Moving UP for center alignment with input box */
       left: calc(var(--sidebar-width) / 2 - 20px); /* Centered in sidebar area */
       width: 40px;
       height: 40px;
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -3102,10 +3159,10 @@
       const { incomplete, completed } = getVisibleTasks();
       
       app.innerHTML = `
-        <div class="app ${state.darkMode}-mode">
+        <div class="app ${state.darkMode}-mode ${state.showMenu && !state.sidebarCollapsed ? 'sidebar-open' : ''}">
           ${!state.showSettings ? `<div class="click-layer" onclick="toggleMenu()"></div>` : ''}
           
-          <!-- Hamburger Menu Button (always outside sidebar) -->
+          <!-- Hamburger Menu Button (always outside sidebar, positioned absolutely) -->
           <button class="hamburger-btn ${state.showMenu ? '' : 'hidden'} ${state.sidebarCollapsed ? 'collapsed' : ''}" onclick="toggleSidebarCollapse()">
             <span></span>
             <span></span>
