@@ -263,6 +263,13 @@
       margin-left: 64px; /* Hamburger at 16px + 40px width + 8px gap = 64px */
     }
     
+    /* Apply same margin to task lists when sidebar collapsed */
+    .app:has(.hamburger-btn.collapsed) .task-list,
+    .app:has(.hamburger-btn.collapsed) .completed-tasks,
+    .app:has(.hamburger-btn.collapsed) .completed-header {
+      margin-left: 68px; /* 64px collapsed offset + 4px alignment = 68px */
+    }
+    
     /* On mobile/tablet, when sidebar is open, add left margin to prevent overlap with hamburger */
     @media (max-width: 768px) {
       .app.sidebar-open .main-content {
@@ -273,6 +280,13 @@
       /* Reset the add-task-form margin when sidebar is open (since main-content already has margin) */
       .app.sidebar-open .add-task-form {
         margin-left: 0;
+      }
+      
+      /* Also reset task list margins to just alignment offset when sidebar is open */
+      .app.sidebar-open .task-list,
+      .app.sidebar-open .completed-tasks,
+      .app.sidebar-open .completed-header {
+        margin-left: 4px; /* Just the alignment offset, no collapsed offset */
       }
     }
     
@@ -309,6 +323,13 @@
       /* Adjust collapsed margin for smaller hamburger */
       .app:has(.hamburger-btn.collapsed) .add-task-form {
         margin-left: 52px; /* 16px + 36px + 8px gap for smaller hamburger */
+      }
+      
+      /* Apply same margin to task lists when sidebar collapsed on small screens */
+      .app:has(.hamburger-btn.collapsed) .task-list,
+      .app:has(.hamburger-btn.collapsed) .completed-tasks,
+      .app:has(.hamburger-btn.collapsed) .completed-header {
+        margin-left: 56px; /* 52px collapsed offset + 4px alignment = 56px */
       }
     }
 
