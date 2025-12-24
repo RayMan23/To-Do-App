@@ -463,6 +463,11 @@
     .task-item.completed {
       opacity: 0.5;
     }
+    
+    /* Important task subtle highlight on hover */
+    .task-item:not(.completed):hover {
+      transition: all 0.2s ease;
+    }
 
     .task-item.subtask {
       margin-left: 40px;
@@ -1939,6 +1944,29 @@
       }
     }
 
+    // Toggle task importance
+    function toggleImportant(taskId, parentId = null) {
+      saveScrollPosition();
+      
+      // Find and toggle task importance recursively
+      const toggleImportantRecursive = (tasks) => {
+        return tasks.map(task => {
+          if (task.id === taskId) {
+            return { ...task, important: !task.important };
+          }
+          if (task.subtasks && task.subtasks.length > 0) {
+            return { ...task, subtasks: toggleImportantRecursive(task.subtasks) };
+          }
+          return task;
+        });
+      };
+      
+      state.tasks = toggleImportantRecursive(state.tasks);
+      saveState();
+      render();
+      restoreScrollPosition();
+    }
+
     // Duplicate task
     function duplicateTask(taskId, parentId = null) {
       saveScrollPosition();
@@ -2846,6 +2874,10 @@
                       !task.recurring && 
                       !task.dueDate;
       
+      // Important task styling
+      const importantStyle = task.important && !isChecked ? 
+        'border-left: 3px solid #f59e0b; background: rgba(245, 158, 11, 0.04);' : '';
+      
       return `
         <div>
           <div 
@@ -2853,7 +2885,7 @@
             data-task-id="${task.id}"
             data-level="${level}"
             ${canDrag ? `draggable="true" ondragstart="startDrag(${task.id}, event)" ondragend="endDrag()"` : ''}
-            style="${canDrag ? 'cursor: move;' : ''} margin-left: ${level * 40}px;"
+            style="${canDrag ? 'cursor: move;' : ''} margin-left: ${level * 40}px; ${importantStyle}"
           >
             ${showCheckbox ? `
               <input 
@@ -2934,6 +2966,9 @@
               </button>
               <button class="icon-btn" onclick="duplicateTask(${task.id}, ${parentId})" title="Duplicate task">
                 📋
+              </button>
+              <button class="icon-btn" onclick="toggleImportant(${task.id}, ${parentId})" title="${task.important ? 'Mark as normal' : 'Mark as important'}" style="${task.important ? 'opacity: 1; filter: grayscale(0);' : ''}">
+                ${task.important ? '⭐' : '☆'}
               </button>
               <button class="icon-btn delete" onclick="deleteTask(${task.id}, ${parentId})">
                 🗑️
