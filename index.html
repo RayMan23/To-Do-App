@@ -2642,6 +2642,14 @@
       const incomplete = filtered.filter(task => !task.completed);
       const completed = filtered.filter(task => task.completed);
       
+      // For recurring and dueby views, don't show completed tasks at all (read-only views)
+      if (state.view === 'recurring' || state.view === 'dueby') {
+        return {
+          incomplete,
+          completed: []
+        };
+      }
+      
       // Add completion records for recurring tasks with all completion history
       let recurringCompletions = [];
       
@@ -2805,6 +2813,9 @@
       const completedToday = task.recurring && isCompletedToday(task);
       const isChecked = task.recurring && state.view === 'today' ? completedToday : task.completed;
       
+      // Hide checkbox in recurring and dueby views (read-only views)
+      const showCheckbox = state.view !== 'recurring' && state.view !== 'dueby';
+      
       // Determine if task can be dragged (only top-level tasks)
       const canDrag = level === 0 && 
                       state.view !== 'recurring' && 
@@ -2821,12 +2832,16 @@
             ${canDrag ? `draggable="true" ondragstart="startDrag(${task.id}, event)" ondragend="endDrag()"` : ''}
             style="${canDrag ? 'cursor: move;' : ''} margin-left: ${level * 40}px;"
           >
-            <input 
-              type="checkbox" 
-              ${isChecked ? 'checked' : ''} 
-              onchange="toggleTask(${task.id}, ${parentId}); this.blur(); return false;"
-              style="pointer-events: auto;"
-            />
+            ${showCheckbox ? `
+              <input 
+                type="checkbox" 
+                ${isChecked ? 'checked' : ''} 
+                onchange="toggleTask(${task.id}, ${parentId}); this.blur(); return false;"
+                style="pointer-events: auto;"
+              />
+            ` : `
+              <span style="width: 20px; display: inline-block;"></span>
+            `}
             
             ${hasSubtasks ? `
               <button class="expand-btn" onclick="toggleExpanded(${task.id})" style="pointer-events: auto;">
@@ -3276,11 +3291,20 @@
                 </button>
               </div>
               
+              ${(state.view === 'recurring' || state.view === 'dueby') && state.showMenu ? `
+                <div style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--text-blue); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; opacity: 0.8;">
+                  <span style="opacity: 0.9;">👁️ View-only mode</span>
+                  <span style="font-size: 13px; display: block; margin-top: 4px; opacity: 0.7;">
+                    ${state.view === 'recurring' ? 'Complete tasks in their original list or in Today to mark them done.' : 'Complete tasks in their original list to mark them done.'}
+                  </span>
+                </div>
+              ` : ''}
+              
               <div class="task-list">
                 ${shouldGroupTasks() ? renderGroupedTasks(incomplete, false) : incomplete.map(task => renderTask(task)).join('')}
               </div>
               
-              ${completed.length > 0 ? `
+              ${completed.length > 0 && state.view !== 'recurring' && state.view !== 'dueby' ? `
                 <div class="completed-section ${state.showMenu ? '' : 'hidden'}">
                   <div class="completed-header ${state.showCompleted ? 'expanded' : ''}" onclick="state.showCompleted = !state.showCompleted; render()">
                     <span>${state.showCompleted ? '▼' : '▶'}</span>
