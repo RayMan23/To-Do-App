@@ -743,7 +743,14 @@
     /* When sidebar is collapsed, position at left edge */
     .hamburger-btn.collapsed {
       left: 16px;
-      background: var(--bg-secondary);
+      background: white;
+      border: none;
+      box-shadow: none;
+    }
+    
+    .hamburger-btn.collapsed:hover {
+      background: white;
+      opacity: 0.8;
     }
     
     .hamburger-btn:hover {
@@ -1565,26 +1572,18 @@
           return;
         }
         
-        // Add bounce animation
-        taskElement.classList.add('completing-task');
+        // Simple subtle expand animation
+        taskElement.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
+        taskElement.style.transform = 'scale(1.02)';
         
-        // Add strike-through line
-        const taskText = taskElement.querySelector('.task-text');
-        if (taskText) {
-          const strike = document.createElement('div');
-          strike.className = 'strike-through-line';
-          taskText.style.position = 'relative';
-          taskText.appendChild(strike);
-        }
-        
-        // Create confetti
-        createConfetti(taskElement);
-        
-        // Wait for animations to complete
+        // Return to normal quickly
         setTimeout(() => {
-          taskElement.classList.remove('completing-task');
-          resolve();
-        }, 400);
+          taskElement.style.transform = 'scale(1)';
+          setTimeout(() => {
+            taskElement.style.transition = '';
+            resolve();
+          }, 150);
+        }, 50);
       });
     }
 
@@ -3053,16 +3052,16 @@
         const padding = isCompleted ? '6px 12px' : '6px 12px';
         const marginBottom = isCompleted ? '8px' : '12px';
         const gap = isCompleted ? '4px' : '4px';
-        const expandedOpacity = isCompleted ? '0.6' : '0.8';
-        const collapsedOpacity = isCompleted ? '0.25' : '0.3';
+        const expandedOpacity = isCompleted ? '0.35' : '0.4';
+        const collapsedOpacity = isCompleted ? '0.2' : '0.25';
         
         return `
           <div style="margin-bottom: ${marginBottom};">
             <div 
               data-group="${expandedKey}"
               onclick="toggleGroup('${expandedKey}')"
-              style="display: flex; align-items: center; gap: 8px; padding: ${padding}; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: ${fontSize}; font-weight: ${isExpanded ? '500' : '400'}; opacity: ${isExpanded ? expandedOpacity : collapsedOpacity}; margin-bottom: ${isCompleted ? '4px' : '6px'}; color: ${isExpanded ? 'inherit' : '#888888'}; pointer-events: auto;"
-              onmouseover="this.style.opacity='0.8'"
+              style="display: flex; align-items: center; gap: 8px; padding: ${padding}; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: ${fontSize}; font-weight: ${isExpanded ? '400' : '300'}; opacity: ${isExpanded ? expandedOpacity : collapsedOpacity}; margin-bottom: ${isCompleted ? '4px' : '6px'}; color: ${isExpanded ? 'inherit' : '#888888'}; pointer-events: auto;"
+              onmouseover="this.style.opacity='0.5'"
               onmouseout="this.style.opacity='${isExpanded ? expandedOpacity : collapsedOpacity}'"
             >
               <span>${isExpanded ? '▼' : '▶'}</span>
