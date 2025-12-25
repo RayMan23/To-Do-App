@@ -481,6 +481,14 @@
 
     .task-text {
       flex: 1;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      border-radius: 3px;
+      transition: background 0.15s ease;
+    }
+
+    .task-text:hover {
+      background: rgba(255, 255, 255, 0.05);
     }
 
     .task-text.completed {
@@ -3032,7 +3040,11 @@
               </button>
             ` : ''}
             
-            <span class="task-text ${isChecked ? 'completed' : ''}">
+            <span class="task-text ${isChecked ? 'completed' : ''}" 
+              ondblclick="if (${state.editingTask !== task.id}) { event.stopPropagation(); state.editingTask = ${task.id}; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0); }" 
+              style="${state.editingTask === task.id ? 'cursor: default;' : 'cursor: text;'}"
+              title="Double-click to edit"
+            >
               ${state.editingTask === task.id ? `
                 <input 
                   type="text" 
@@ -3106,11 +3118,6 @@
                   <button class="action-menu-item" onclick="event.stopPropagation(); const subtaskText = prompt('Add subtask:'); if (subtaskText) { addTask(subtaskText, ${task.id}); state.openActionMenu = null; }">
                     <span class="emoji">➕</span>
                     <span>Add subtask</span>
-                  </button>
-                  
-                  <button class="action-menu-item" onclick="event.stopPropagation(); state.editingTask = ${task.id}; state.openActionMenu = null; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0);">
-                    <span class="emoji">✏️</span>
-                    <span>Edit task</span>
                   </button>
                   
                   <button class="action-menu-item" onclick="event.stopPropagation(); duplicateTask(${task.id}, ${parentId}); state.openActionMenu = null;">
