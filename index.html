@@ -310,7 +310,7 @@
       
       /* On mobile, hamburger also goes to the right when collapsed */
       .hamburger-btn.collapsed {
-        right: 24px; /* mobile padding (16px) + gap (8px) = 24px from edge */
+        right: 72px; /* 16px mobile padding + ~48px button width + 8px gap */
         top: 27px; /* Align with mobile spacing */
         width: 40px; /* Slightly smaller on mobile */
         height: 40px;
@@ -320,9 +320,9 @@
         padding: 8px;
       }
       
-      /* Add right margin for hamburger on mobile */
+      /* Don't add margin on mobile either */
       .app:has(.hamburger-btn.collapsed) .add-task-form {
-        margin-right: 56px; /* 40px hamburger + 8px gap + 8px buffer */
+        margin-right: 0;
         margin-left: 0;
       }
       
@@ -844,7 +844,7 @@
     /* When sidebar is collapsed, position next to the + button */
     .hamburger-btn.collapsed {
       left: auto;
-      right: 40px; /* main-content right padding (32px) + gap (8px) = 40px from edge */
+      right: 88px; /* 32px main padding + ~48px button width + 8px gap */
       top: 32px; /* Align with add-task-form vertical position */
       width: 44px; /* Match button proportions */
       height: 44px; /* Match button height */
@@ -855,9 +855,9 @@
       padding: 10px; /* Adjusted padding to center the lines */
     }
     
-    /* Add small right margin to add-task-form when hamburger is collapsed to make space */
+    /* Don't add margin to add-task-form - hamburger is absolutely positioned */
     .app:has(.hamburger-btn.collapsed) .add-task-form {
-      margin-right: 60px; /* 44px hamburger + 8px gap + 8px buffer */
+      margin-right: 0;
       margin-left: 0;
     }
     
