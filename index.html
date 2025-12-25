@@ -523,6 +523,14 @@
       justify-content: center;
     }
 
+    .app.dark-mode .icon-btn {
+      color: white;
+    }
+
+    .app.light-mode .icon-btn {
+      color: #1a1a1a;
+    }
+
     .icon-btn:hover {
       background: rgba(255, 255, 255, 0.1);
     }
@@ -1063,7 +1071,15 @@
       tempRecurring: null,
       tempRecurringDays: null,
       tempRecurringMonthly: null,
-      openActionMenu: null // Track which task has open action menu dropdown
+      openActionMenu: null, // Track which task has open action menu dropdown
+      visibleSections: {
+        dueby: true,
+        recurring: true,
+        notepad: true,
+        projects: true
+      }, // Control which sidebar sections are visible (today is always visible)
+      trashedTasks: [], // Store deleted tasks for trash view
+      showTrash: false // Show/hide trash view
     };
     
     // Scroll preservation using scrollIntoView (most reliable method)
@@ -1142,6 +1158,17 @@
           state.workDays = settings.workDays || [1, 2, 3, 4, 5];
           state.customLists = settings.customLists || [];
           state.listDaysAhead = settings.listDaysAhead || {};
+          state.visibleSections = settings.visibleSections || {
+            dueby: true,
+            recurring: true,
+            notepad: true,
+            projects: true
+          };
+        }
+        
+        const savedTrash = localStorage.getItem('trashedTasks');
+        if (savedTrash) {
+          state.trashedTasks = JSON.parse(savedTrash);
         }
         
         // Sync task map after loading
@@ -1156,6 +1183,7 @@
       try {
         localStorage.setItem('tasks', JSON.stringify(state.tasks));
         localStorage.setItem('deletedTaskIds', JSON.stringify(state.deletedTaskIds || []));
+        localStorage.setItem('trashedTasks', JSON.stringify(state.trashedTasks || []));
         localStorage.setItem('settings', JSON.stringify({
           darkMode: state.darkMode,
           showCountdown: state.showCountdown,
@@ -1165,7 +1193,8 @@
           reverseSortOrder: state.reverseSortOrder,
           workDays: state.workDays,
           customLists: state.customLists,
-          listDaysAhead: state.listDaysAhead
+          listDaysAhead: state.listDaysAhead,
+          visibleSections: state.visibleSections
         }));
       } catch (e) {
         console.error('Failed to save state', e);
@@ -1181,6 +1210,17 @@
     function updateListDaysAhead(listId, days) {
       state.listDaysAhead[listId] = parseInt(days);
       triggerSync(); // Event-based sync
+      render();
+    }
+
+    // Toggle sidebar section visibility
+    function toggleSectionVisibility(section) {
+      state.visibleSections[section] = !state.visibleSections[section];
+      // If we're currently viewing a section that's being hidden, switch to Today
+      if (state.view === section && !state.visibleSections[section]) {
+        state.view = 'today';
+      }
+      triggerSync();
       render();
     }
 
@@ -1994,6 +2034,23 @@
 
     // Delete task
     function deleteTask(taskId, parentId = null) {
+      // Find the task before deleting it so we can store it in trash
+      const task = state.taskMap.get(taskId);
+      if (task) {
+        // Store in trash with deletion timestamp
+        if (!state.trashedTasks) state.trashedTasks = [];
+        state.trashedTasks.push({
+          ...JSON.parse(JSON.stringify(task)), // Deep copy
+          deletedAt: new Date().toISOString(),
+          parentId: parentId // Remember if it was a subtask
+        });
+        
+        // Keep only last 100 trashed tasks
+        if (state.trashedTasks.length > 100) {
+          state.trashedTasks = state.trashedTasks.slice(-100);
+        }
+      }
+      
       // Track deletion for sync conflict resolution
       if (!state.deletedTaskIds) state.deletedTaskIds = [];
       if (!state.deletedTaskIds.includes(taskId)) {
@@ -2011,6 +2068,50 @@
         // Simply remove the element from DOM
         removeTaskElement(taskId);
       } else {
+        render();
+      }
+    }
+
+    // Restore task from trash
+    function restoreTask(trashedIndex) {
+      if (trashedIndex < 0 || trashedIndex >= state.trashedTasks.length) return;
+      
+      const trashedTask = state.trashedTasks[trashedIndex];
+      const restoredTask = { ...trashedTask };
+      delete restoredTask.deletedAt;
+      delete restoredTask.parentId;
+      
+      // Remove from deleted IDs list
+      state.deletedTaskIds = state.deletedTaskIds.filter(id => id !== restoredTask.id);
+      
+      // Add back to tasks
+      state.tasks.push(restoredTask);
+      
+      // Remove from trash
+      state.trashedTasks.splice(trashedIndex, 1);
+      
+      syncTaskMap();
+      saveState();
+      triggerSync();
+      render();
+    }
+
+    // Permanently delete task from trash
+    function permanentlyDeleteTask(trashedIndex) {
+      if (trashedIndex < 0 || trashedIndex >= state.trashedTasks.length) return;
+      
+      if (confirm('Permanently delete this task? This cannot be undone.')) {
+        state.trashedTasks.splice(trashedIndex, 1);
+        saveState();
+        render();
+      }
+    }
+
+    // Empty trash
+    function emptyTrash() {
+      if (confirm('Permanently delete all items in trash? This cannot be undone.')) {
+        state.trashedTasks = [];
+        saveState();
         render();
       }
     }
@@ -3429,6 +3530,7 @@
               >
                 Today
               </button>
+              ${state.visibleSections.dueby ? `
               <button 
                 class="nav-btn ${state.view === 'dueby' ? 'active' : ''}" 
                 onclick="state.view = 'dueby'; state.domInitialized = false; render()"
@@ -3437,6 +3539,8 @@
               >
                 Due By
               </button>
+              ` : ''}
+              ${state.visibleSections.recurring ? `
               <button 
                 class="nav-btn ${state.view === 'recurring' ? 'active' : ''}" 
                 onclick="state.view = 'recurring'; state.domInitialized = false; render()"
@@ -3445,6 +3549,8 @@
               >
                 Recurring
               </button>
+              ` : ''}
+              ${state.visibleSections.notepad ? `
               <button 
                 class="nav-btn ${state.view === 'notepad' ? 'active' : ''}" 
                 onclick="state.view = 'notepad'; state.domInitialized = false; render()"
@@ -3455,6 +3561,8 @@
               >
                 Notepad
               </button>
+              ` : ''}
+              ${state.visibleSections.projects ? `
               <button 
                 class="nav-btn ${state.view === 'projects' ? 'active' : ''}" 
                 onclick="state.view = 'projects'; state.domInitialized = false; render()"
@@ -3465,6 +3573,7 @@
               >
                 Projects
               </button>
+              ` : ''}
               
               ${state.customLists.map(list => `
                 <button 
@@ -3889,6 +3998,116 @@
               </div>
               
               <div class="settings-section">
+                <label>Sidebar Sections</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Choose which sections appear in the sidebar (Today is always visible)</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input 
+                      type="checkbox" 
+                      ${state.visibleSections.dueby ? 'checked' : ''} 
+                      onchange="toggleSectionVisibility('dueby')"
+                      style="width: 18px; height: 18px; cursor: pointer;"
+                    />
+                    <span>Due By</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input 
+                      type="checkbox" 
+                      ${state.visibleSections.recurring ? 'checked' : ''} 
+                      onchange="toggleSectionVisibility('recurring')"
+                      style="width: 18px; height: 18px; cursor: pointer;"
+                    />
+                    <span>Recurring</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input 
+                      type="checkbox" 
+                      ${state.visibleSections.notepad ? 'checked' : ''} 
+                      onchange="toggleSectionVisibility('notepad')"
+                      style="width: 18px; height: 18px; cursor: pointer;"
+                    />
+                    <span>Notepad</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input 
+                      type="checkbox" 
+                      ${state.visibleSections.projects ? 'checked' : ''} 
+                      onchange="toggleSectionVisibility('projects')"
+                      style="width: 18px; height: 18px; cursor: pointer;"
+                    />
+                    <span>Projects</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <label>Trash</label>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">
+                  ${state.trashedTasks.length} deleted ${state.trashedTasks.length === 1 ? 'task' : 'tasks'}
+                </div>
+                <button class="btn" onclick="state.showTrash = !state.showTrash; render();" style="width: 100%;">
+                  🗑️ ${state.showTrash ? 'Hide Trash' : 'View Trash'}
+                </button>
+                
+                ${state.showTrash && state.trashedTasks.length > 0 ? `
+                  <div style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <span style="font-size: 14px; font-weight: 500;">Deleted Tasks</span>
+                      <button 
+                        class="btn" 
+                        onclick="emptyTrash()" 
+                        style="padding: 4px 12px; font-size: 12px; background: var(--bg-delete); color: white;"
+                      >
+                        Empty Trash
+                      </button>
+                    </div>
+                    <div style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); border-radius: 6px; padding: 8px;">
+                      ${state.trashedTasks
+                        .slice()
+                        .reverse() // Show newest first
+                        .map((task, reverseIndex) => {
+                          const index = state.trashedTasks.length - 1 - reverseIndex;
+                          const deletedDate = new Date(task.deletedAt);
+                          return `
+                            <div style="padding: 8px; margin-bottom: 6px; background: var(--bg-main); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                              <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${task.text}</div>
+                                <div style="font-size: 11px; opacity: 0.6; margin-top: 2px;">
+                                  Deleted ${deletedDate.toLocaleDateString()} ${deletedDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </div>
+                              <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                                <button 
+                                  class="btn" 
+                                  onclick="restoreTask(${index})" 
+                                  style="padding: 4px 12px; font-size: 12px; background: #16a34a; color: white; white-space: nowrap;"
+                                  title="Restore this task"
+                                >
+                                  ↶ Restore
+                                </button>
+                                <button 
+                                  class="btn" 
+                                  onclick="permanentlyDeleteTask(${index})" 
+                                  style="padding: 4px 8px; font-size: 12px; background: var(--bg-delete); color: white;"
+                                  title="Permanently delete"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          `;
+                        })
+                        .join('')}
+                    </div>
+                  </div>
+                ` : state.showTrash ? `
+                  <div style="margin-top: 16px; text-align: center; padding: 24px; opacity: 0.6;">
+                    Trash is empty
+                  </div>
+                ` : ''}
+              </div>
+              
+              <div class="settings-section">
                 <label>Manual Backup</label>
                 <div style="font-size: 13px; opacity: 0.7; margin-bottom: 12px;">Export/import your data manually</div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -4202,6 +4421,7 @@
         const data = {
           tasks: state.tasks,
           deletedTaskIds: state.deletedTaskIds || [], // Track deleted task IDs
+          trashedTasks: state.trashedTasks || [], // Store deleted tasks for trash view
           settings: {
             darkMode: state.darkMode,
             showCountdown: state.showCountdown,
@@ -4211,7 +4431,8 @@
             reverseSortOrder: state.reverseSortOrder,
             workDays: state.workDays,
             customLists: state.customLists,
-            listDaysAhead: state.listDaysAhead
+            listDaysAhead: state.listDaysAhead,
+            visibleSections: state.visibleSections
           },
           expandedGroups: state.expandedGroups,
           lastModified: new Date().toISOString(),
@@ -4413,9 +4634,20 @@
           // Merge deletion lists (keep union of both)
           state.deletedTaskIds = Array.from(new Set([...localDeletedIds, ...driveDeletedIds]));
           
-          // Cleanup: keep only last 100 deleted IDs to prevent list from growing forever
+          // Merge trash lists (keep union of both, remove duplicates by ID)
+          const localTrash = state.trashedTasks || [];
+          const driveTrash = data.trashedTasks || [];
+          const mergedTrashMap = new Map();
+          driveTrash.forEach(task => mergedTrashMap.set(task.id, task));
+          localTrash.forEach(task => mergedTrashMap.set(task.id, task));
+          state.trashedTasks = Array.from(mergedTrashMap.values());
+          
+          // Cleanup: keep only last 100 deleted IDs and trashed tasks
           if (state.deletedTaskIds.length > 100) {
             state.deletedTaskIds = state.deletedTaskIds.slice(-100);
+          }
+          if (state.trashedTasks.length > 100) {
+            state.trashedTasks = state.trashedTasks.slice(-100);
           }
           
           // Detect if data actually changed
@@ -4435,6 +4667,7 @@
             state.viewSortPreferences = data.settings.viewSortPreferences || state.viewSortPreferences;
             state.reverseSortOrder = data.reverseSortOrder || {};
             state.workDays = data.settings.workDays || [1, 2, 3, 4, 5];
+            state.visibleSections = data.settings.visibleSections || state.visibleSections;
             
             // MERGE customLists: keep union of local + drive lists (by ID)
             const localCustomLists = state.customLists || [];
