@@ -523,6 +523,51 @@
       background: #dc2626;
     }
 
+    /* Action menu dropdown */
+    .action-menu-dropdown {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      min-width: 180px;
+      padding: 4px 0;
+    }
+
+    .action-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--text-main);
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .action-menu-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .action-menu-item.delete:hover {
+      background: #dc2626;
+      color: white;
+    }
+
+    .action-menu-item .emoji {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
     .expand-btn {
       background: none;
       border: none;
@@ -962,6 +1007,18 @@
       }
     });
     
+    // Close action menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (state.openActionMenu !== null) {
+        // Check if click is outside the action menu
+        const isMenuClick = e.target.closest('.action-menu-dropdown') || e.target.closest('.task-actions');
+        if (!isMenuClick) {
+          state.openActionMenu = null;
+          render();
+        }
+      }
+    });
+    
     // Simple state management
     let state = {
       tasks: [],
@@ -997,7 +1054,8 @@
       tempDueDate: null,
       tempRecurring: null,
       tempRecurringDays: null,
-      tempRecurringMonthly: null
+      tempRecurringMonthly: null,
+      openActionMenu: null // Track which task has open action menu dropdown
     };
     
     // Scroll preservation using scrollIntoView (most reliable method)
@@ -3021,30 +3079,51 @@
               `}
             </span>
             
-            <div class="task-actions">
-              <button class="icon-btn" onclick="if (state.expandedDueDate !== ${task.id}) { state.tempDueDate = ${task.dueDate ? `'${task.dueDate}'` : 'null'}; } state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; render()">
-                📅
+            <div class="task-actions" style="position: relative;">
+              <button class="icon-btn" onclick="event.stopPropagation(); state.openActionMenu = state.openActionMenu === ${task.id} ? null : ${task.id}; render();" title="Actions">
+                ⋮
               </button>
-              ${level === 0 ? `
-                <button class="icon-btn" onclick="if (state.expandedRecurring !== ${task.id}) { state.tempRecurring = ${task.recurring ? `'${task.recurring}'` : 'null'}; state.tempRecurringDays = null; state.tempRecurringMonthly = null; } state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; render()">
-                  🔁
-                </button>
+              
+              ${state.openActionMenu === task.id ? `
+                <div class="action-menu-dropdown">
+                  <button class="action-menu-item" onclick="event.stopPropagation(); if (state.expandedDueDate !== ${task.id}) { state.tempDueDate = ${task.dueDate ? `'${task.dueDate}'` : 'null'}; } state.expandedDueDate = state.expandedDueDate === ${task.id} ? null : ${task.id}; state.expandedRecurring = null; state.openActionMenu = null; render();">
+                    <span class="emoji">📅</span>
+                    <span>Set due date</span>
+                  </button>
+                  
+                  ${level === 0 ? `
+                    <button class="action-menu-item" onclick="event.stopPropagation(); if (state.expandedRecurring !== ${task.id}) { state.tempRecurring = ${task.recurring ? `'${task.recurring}'` : 'null'}; state.tempRecurringDays = null; state.tempRecurringMonthly = null; } state.expandedRecurring = state.expandedRecurring === ${task.id} ? null : ${task.id}; state.expandedDueDate = null; state.openActionMenu = null; render();">
+                      <span class="emoji">🔁</span>
+                      <span>Set recurring</span>
+                    </button>
+                  ` : ''}
+                  
+                  <button class="action-menu-item" onclick="event.stopPropagation(); toggleImportant(${task.id}, ${parentId}); state.openActionMenu = null;">
+                    <span class="emoji">${task.important ? '⭐' : '☆'}</span>
+                    <span>${task.important ? 'Remove importance' : 'Mark important'}</span>
+                  </button>
+                  
+                  <button class="action-menu-item" onclick="event.stopPropagation(); const subtaskText = prompt('Add subtask:'); if (subtaskText) { addTask(subtaskText, ${task.id}); state.openActionMenu = null; }">
+                    <span class="emoji">➕</span>
+                    <span>Add subtask</span>
+                  </button>
+                  
+                  <button class="action-menu-item" onclick="event.stopPropagation(); state.editingTask = ${task.id}; state.openActionMenu = null; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0);">
+                    <span class="emoji">✏️</span>
+                    <span>Edit task</span>
+                  </button>
+                  
+                  <button class="action-menu-item" onclick="event.stopPropagation(); duplicateTask(${task.id}, ${parentId}); state.openActionMenu = null;">
+                    <span class="emoji">📋</span>
+                    <span>Duplicate</span>
+                  </button>
+                  
+                  <button class="action-menu-item delete" onclick="event.stopPropagation(); deleteTask(${task.id}, ${parentId}); state.openActionMenu = null;">
+                    <span class="emoji">🗑️</span>
+                    <span>Delete</span>
+                  </button>
+                </div>
               ` : ''}
-              <button class="icon-btn" onclick="addTask(prompt('Add subtask:'), ${task.id})" title="Add subtask">
-                ➕
-              </button>
-              <button class="icon-btn" onclick="state.editingTask = ${task.id}; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0)">
-                ✏️
-              </button>
-              <button class="icon-btn" onclick="duplicateTask(${task.id}, ${parentId})" title="Duplicate task">
-                📋
-              </button>
-              <button class="icon-btn" onclick="toggleImportant(${task.id}, ${parentId})" title="${task.important ? 'Mark as normal' : 'Mark as important'}" style="${task.important ? 'opacity: 1; filter: grayscale(0);' : ''}">
-                ${task.important ? '⭐' : '☆'}
-              </button>
-              <button class="icon-btn delete" onclick="deleteTask(${task.id}, ${parentId})">
-                🗑️
-              </button>
             </div>
           </div>
           
