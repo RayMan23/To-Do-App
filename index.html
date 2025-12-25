@@ -310,13 +310,19 @@
       
       /* On mobile, hamburger also goes to the right when collapsed */
       .hamburger-btn.collapsed {
-        right: 16px; /* Less padding on mobile */
+        right: 24px; /* mobile padding (16px) + gap (8px) = 24px from edge */
         top: 27px; /* Align with mobile spacing */
+        width: 40px; /* Slightly smaller on mobile */
+        height: 40px;
+        background: var(--bg-button);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px;
       }
       
       /* Add right margin for hamburger on mobile */
       .app:has(.hamburger-btn.collapsed) .add-task-form {
-        margin-right: 52px; /* 36px smaller hamburger + 16px gap */
+        margin-right: 56px; /* 40px hamburger + 8px gap + 8px buffer */
         margin-left: 0;
       }
       
@@ -838,22 +844,27 @@
     /* When sidebar is collapsed, position next to the + button */
     .hamburger-btn.collapsed {
       left: auto;
-      right: 16px; /* Align with main-content right padding minus some offset */
+      right: 40px; /* main-content right padding (32px) + gap (8px) = 40px from edge */
       top: 32px; /* Align with add-task-form vertical position */
-      background: transparent;
-      border: none;
+      width: 44px; /* Match button proportions */
+      height: 44px; /* Match button height */
+      background: var(--bg-button);
+      border: 1px solid var(--border-color);
+      border-radius: 6px; /* Match .btn border-radius */
       box-shadow: none;
+      padding: 10px; /* Adjusted padding to center the lines */
     }
     
     /* Add small right margin to add-task-form when hamburger is collapsed to make space */
     .app:has(.hamburger-btn.collapsed) .add-task-form {
-      margin-right: 56px; /* 40px hamburger + 16px gap */
+      margin-right: 60px; /* 44px hamburger + 8px gap + 8px buffer */
       margin-left: 0;
     }
     
     .hamburger-btn.collapsed:hover {
-      background: rgba(255, 255, 255, 0.1);
-      opacity: 1;
+      background: var(--bg-button);
+      opacity: 0.8;
+      transform: none; /* Don't scale like the regular hamburger */
     }
     
     /* Remove left margin from task lists when collapsed */
