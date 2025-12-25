@@ -310,12 +310,14 @@
       
       /* On mobile, collapsed hamburger is also part of flex layout */
       .hamburger-btn.collapsed {
-        width: 40px; /* Slightly smaller on mobile to match button */
-        height: 40px;
+        position: static; /* Override absolute positioning */
+        width: 40px;
+        height: auto; /* Let padding determine height */
+        padding: 12px 14px; /* Slightly less horizontal padding on mobile */
         background: var(--bg-button);
         border: 1px solid var(--border-color);
         border-radius: 6px;
-        padding: 8px;
+        gap: 4px;
       }
       
       /* No margin adjustments needed on mobile either */
@@ -780,30 +782,24 @@
     
     /* Sync Status Indicator */
     .sync-status {
-      position: absolute;
-      top: 12px;
-      right: 20px;
+      /* Now positioned in sidebar - no absolute positioning */
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 8px 14px;
+      margin-bottom: 8px; /* Space above settings button */
       background: var(--bg-secondary);
       border-radius: 20px;
       font-size: 12px;
       opacity: 0.7;
       cursor: pointer;
       transition: all 0.2s ease;
-      z-index: 10;
       user-select: none;
     }
     
     .sync-status:hover {
       opacity: 1;
       transform: scale(1.05);
-    }
-    
-    .sync-status.hidden {
-      display: none;
     }
     
     .sync-icon {
@@ -841,15 +837,19 @@
     
     /* When sidebar is collapsed, hamburger is part of the form flex layout */
     .hamburger-btn.collapsed {
-      /* No positioning needed - it's part of the flex container */
-      width: 44px; /* Match button proportions */
-      height: 44px; /* Match button height */
+      /* Override absolute positioning - need to be part of flex layout */
+      position: static;
+      /* Match the .btn styling exactly */
+      width: 44px;
+      height: auto; /* Let padding determine height like .btn */
+      padding: 12px 16px; /* Same as .btn */
       flex-shrink: 0; /* Don't shrink */
       background: var(--bg-button);
       border: 1px solid var(--border-color);
       border-radius: 6px; /* Match .btn border-radius */
       box-shadow: none;
-      padding: 10px; /* Adjusted padding to center the lines */
+      /* Adjust gap between hamburger lines */
+      gap: 4px;
     }
     
     /* No margin adjustments needed - flex layout handles spacing */
@@ -3704,6 +3704,17 @@
               </button>
             </nav>
             
+            <!-- Sync Status Indicator in sidebar -->
+            <div class="sync-status" onclick="event.stopPropagation(); state.showSettings = true; render();" title="Click to open settings">
+              ${googleUser ? `
+                <span class="sync-icon">${isSyncing ? '⏳' : '✅'}</span>
+                <span class="sync-text">${isSyncing ? 'Syncing...' : (lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Synced')}</span>
+              ` : `
+                <span class="sync-icon">⚠️</span>
+                <span class="sync-text">Not signed in</span>
+              `}
+            </div>
+            
             <button class="nav-btn settings-btn" onclick="state.showSettings = true; render()">
               ⚙️ Settings
             </button>
@@ -3717,16 +3728,6 @@
           
           <div class="main-content" onclick="if(event.target === this || event.target.classList.contains('main-inner')) { state.expandedNote = null; toggleMenu(); }">
             <div class="main-inner">
-              <!-- Sync Status Indicator (hides in focus mode) -->
-              <div class="sync-status ${state.showMenu ? '' : 'hidden'}" onclick="event.stopPropagation(); state.showSettings = true; render();" title="Click to open settings">
-                ${googleUser ? `
-                  <span class="sync-icon">${isSyncing ? '⏳' : '✅'}</span>
-                  <span class="sync-text">${isSyncing ? 'Syncing...' : (lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Synced')}</span>
-                ` : `
-                  <span class="sync-icon">⚠️</span>
-                  <span class="sync-text">Not signed in</span>
-                `}
-              </div>
               
               <div class="add-task-form ${state.showMenu && state.view !== 'recurring' && state.view !== 'dueby' ? '' : 'hidden'}">
                 <input 
