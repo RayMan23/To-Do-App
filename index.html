@@ -3217,8 +3217,9 @@
             
             <span class="task-text ${isChecked ? 'completed' : ''}" 
               ondblclick="if (${state.editingTask !== task.id}) { event.stopPropagation(); state.editingTask = ${task.id}; render(); setTimeout(() => document.getElementById('edit-input-${task.id}').focus(), 0); }" 
-              style="${state.editingTask === task.id ? 'cursor: default;' : 'cursor: text;'}"
-              title="Double-click to edit"
+              onclick="${task.note ? `event.stopPropagation(); if (${state.editingTask} !== ${task.id}) { toggleNote(${task.id}); }` : ''}"
+              style="${state.editingTask === task.id ? 'cursor: default;' : (task.note ? 'cursor: pointer;' : 'cursor: text;')}"
+              title="${task.note ? 'Click to view note • Double-click to edit task' : 'Double-click to edit'}"
             >
               ${state.editingTask === task.id ? `
                 <input 
@@ -3295,13 +3296,6 @@
                     <span class="emoji">📝</span>
                     <span>${task.note ? 'Edit note' : 'Add note'}</span>
                   </button>
-                  
-                  ${task.note ? `
-                  <button class="action-menu-item" onclick="event.stopPropagation(); state.openActionMenu = null; toggleNote(${task.id});">
-                    <span class="emoji">👁️</span>
-                    <span>View note</span>
-                  </button>
-                  ` : ''}
                   
                   <button class="action-menu-item" onclick="event.stopPropagation(); const subtaskText = prompt('Add subtask:'); if (subtaskText) { addTask(subtaskText, ${task.id}); state.openActionMenu = null; }">
                     <span class="emoji">➕</span>
@@ -3435,7 +3429,7 @@
           ` : ''}
           
           ${state.expandedNote === task.id && task.note ? `
-            <div class="task-note" style="background: var(--bg-secondary); color: var(--text-main); margin-left: ${level * 40}px; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 14px; line-height: 1.6; border-left: 3px solid var(--text-blue);">
+            <div class="task-note" onclick="event.stopPropagation();" style="background: var(--bg-secondary); color: var(--text-main); margin-left: ${level * 40}px; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 14px; line-height: 1.6; border-left: 3px solid var(--text-blue);">
               ${linkifyText(task.note)}
             </div>
           ` : ''}
