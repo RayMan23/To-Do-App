@@ -1782,6 +1782,880 @@
              state.view.startsWith('custom-');
     }
     
+      position: relative;
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Clickable background layer */
+    .click-layer {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 20px; /* Leave space for scrollbar (typical width 15-20px) */
+      z-index: 1;
+      cursor: pointer;
+      pointer-events: all;
+    }
+
+    /* Dark mode - white text on dark background */
+    .app.dark-mode {
+      background: #1a1a1a;
+      color: white;
+    }
+
+    .app.dark-mode .sidebar {
+      background: #2d2d2d;
+      border-right: 1px solid #404040;
+    }
+
+    .app.dark-mode .nav-btn {
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app.dark-mode .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .app.dark-mode .nav-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .app.dark-mode input,
+    .app.dark-mode select {
+      background: #2d2d2d;
+      color: white;
+      border: 1px solid #404040;
+    }
+
+    .app.dark-mode .task-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app.dark-mode .btn {
+      background: #404040;
+    }
+
+    .app.dark-mode .btn:hover {
+      background: #505050;
+    }
+
+    .app.dark-mode .modal-bg {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    .app.dark-mode .modal {
+      background: #2d2d2d;
+    }
+
+    /* Light mode - black text on light background */
+    .app.light-mode {
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .sidebar {
+      background: #f5f5f5;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .app.light-mode .nav-btn {
+      color: #1a1a1a;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .app.light-mode .nav-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    .app.light-mode .nav-btn.active {
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .app.light-mode input,
+    .app.light-mode select {
+      background: #ffffff;
+      color: #1a1a1a;
+      border: 1px solid #d0d0d0;
+    }
+
+    .app.light-mode .task-item:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .app.light-mode .btn {
+      background: #e0e0e0;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .btn:hover {
+      background: #d0d0d0;
+    }
+
+    .app.light-mode .modal-bg {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .app.light-mode .modal {
+      background: #ffffff;
+      color: #1a1a1a;
+    }
+
+    .app.light-mode .close-btn {
+      color: #1a1a1a;
+    }
+
+    .sidebar {
+      position: relative;
+      width: var(--sidebar-width, 125px);
+      min-width: 100px;
+      max-width: 400px;
+      padding: 16px;
+      padding-top: 90px; /* Space for hamburger: 34px top + 40px height + 16px spacing = 90px */
+      padding-bottom: 100px; /* Extra padding for mobile OS navigation bars */
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+
+    .sidebar.hidden {
+      display: none;
+    }
+
+    .sidebar-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      cursor: ew-resize;
+      background: transparent;
+      z-index: 20;
+      transition: background 0.2s;
+    }
+
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.resizing {
+      background: rgba(59, 130, 246, 0.5);
+    }
+
+    .sidebar h1 {
+      font-size: 20px;
+      font-weight: 300;
+      margin-bottom: 24px;
+    }
+
+    .nav-btn {
+      text-align: left;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.2s;
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .settings-btn {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-content {
+      position: relative;
+      flex: 1;
+      padding: 32px 32px 32px 16px; /* Reduced left padding from 32px to 16px for better space usage */
+      overflow-y: auto;
+      overflow-anchor: none; /* Prevent browser from auto-adjusting scroll */
+      z-index: 2;
+      /* pointer-events removed to allow scrollbar to work */
+    }
+
+    .main-inner {
+      max-width: 1150px; /* Sweet spot for task text width */
+      margin: 0; /* Left-aligned instead of centered for better space usage */
+      pointer-events: all;
+    }
+
+    .add-task-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      pointer-events: auto;
+      transition: margin-left 0.3s ease;
+    }
+
+    .add-task-form.hidden {
+      display: none;
+    }
+
+    .add-task-form input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 16px;
+    }
+    
+    /* When sidebar is collapsed, add left margin to prevent overlap with hamburger */
+    .hamburger-btn.collapsed ~ * .add-task-form,
+    .app:has(.hamburger-btn.collapsed) .add-task-form {
+      margin-left: 64px; /* Hamburger at 16px + 40px width + 8px gap = 64px */
+    }
+    
+    /* Apply same margin to task lists when sidebar collapsed */
+    .app:has(.hamburger-btn.collapsed) .task-list,
+    .app:has(.hamburger-btn.collapsed) .completed-tasks,
+    .app:has(.hamburger-btn.collapsed) .completed-header {
+      margin-left: 68px; /* 64px collapsed offset + 4px alignment = 68px */
+    }
+    
+    /* On mobile/tablet, when sidebar is open, add left margin to prevent overlap with hamburger */
+    @media (max-width: 768px) {
+      .app.sidebar-open .main-content {
+        margin-left: calc(var(--sidebar-width) + 8px); /* Sidebar width + 8px gap */
+        transition: margin-left 0.3s ease;
+      }
+      
+      /* Reset the add-task-form margin when sidebar is open (since main-content already has margin) */
+      .app.sidebar-open .add-task-form {
+        margin-left: 0;
+      }
+      
+      /* Also reset task list margins to just alignment offset when sidebar is open */
+      .app.sidebar-open .task-list,
+      .app.sidebar-open .completed-tasks,
+      .app.sidebar-open .completed-header {
+        margin-left: 4px; /* Just the alignment offset, no collapsed offset */
+      }
+    }
+    
+    /* On very narrow screens, adjust sizing */
+    @media (max-width: 400px) {
+      .add-task-form input {
+        font-size: 14px;
+        padding: 10px 12px;
+      }
+      
+      .btn {
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      
+      .hamburger-btn {
+        width: 36px;
+        height: 36px;
+        top: 27px; /* Moved down 1 more px for perfect alignment */
+      }
+      
+      .hamburger-btn span {
+        width: 20px;
+      }
+      
+      .main-content {
+        padding: 24px 16px;
+      }
+      
+      .sidebar {
+        padding-top: 79px; /* 27px + 36px + 16px = 79px for smaller hamburger */
+      }
+      
+      /* Adjust collapsed margin for smaller hamburger */
+      .app:has(.hamburger-btn.collapsed) .add-task-form {
+        margin-left: 52px; /* 16px + 36px + 8px gap for smaller hamburger */
+      }
+      
+      /* Apply same margin to task lists when sidebar collapsed on small screens */
+      .app:has(.hamburger-btn.collapsed) .task-list,
+      .app:has(.hamburger-btn.collapsed) .completed-tasks,
+      .app:has(.hamburger-btn.collapsed) .completed-header {
+        margin-left: 56px; /* 52px collapsed offset + 4px alignment = 56px */
+      }
+    }
+
+    .btn {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+
+    /* Utility classes to reduce inline styles */
+    .delete-btn {
+      padding: 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: opacity 0.2s, background 0.2s;
+    }
+
+    .delete-btn:hover {
+      opacity: 1;
+      background: rgba(220, 38, 38, 0.2);
+    }
+
+    .add-list-btn {
+      opacity: 0.6;
+      margin-top: 8px;
+    }
+
+    .list-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .list-btn-flex {
+      flex: 1;
+    }
+
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 4px; /* Align with add-task-form input (16px input padding - 12px task padding = 4px offset) */
+    }
+
+    .completed-section {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid;
+    }
+
+    .app.dark-mode .completed-section {
+      border-top-color: #404040;
+    }
+
+    .app.light-mode .completed-section {
+      border-top-color: #d0d0d0;
+    }
+
+    .completed-section.hidden {
+      display: none;
+    }
+
+    .completed-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-left: 4px; /* Align with task-list and group headers */
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 14px;
+      font-weight: 400;
+      opacity: 0.3;
+      margin-bottom: 8px;
+      color: #888888;
+    }
+
+    .completed-header:hover {
+      opacity: 0.8;
+    }
+
+    .completed-header.expanded {
+      font-weight: 500;
+      opacity: 0.8;
+      color: inherit;
+    }
+
+    .completed-tasks {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 4px; /* Align with task-list */
+    }
+
+    .completed-tasks.hidden {
+      display: none;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.2s;
+      pointer-events: auto;
+    }
+
+    .task-item[draggable="true"]:hover {
+      background: rgba(128, 128, 128, 0.1);
+      cursor: move;
+    }
+
+    .task-item[draggable="true"]:active {
+      opacity: 0.5;
+    }
+
+    .nav-btn.drag-over {
+      background: rgba(100, 200, 100, 0.2) !important;
+      border-left: 3px solid #4ade80;
+    }
+
+    .task-item.completed {
+      opacity: 0.5;
+    }
+    
+    /* Important task subtle highlight on hover */
+    .task-item:not(.completed):hover {
+      transition: all 0.2s ease;
+    }
+
+    .task-item.subtask {
+      margin-left: 40px;
+    }
+
+    .task-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .task-text {
+      flex: 1;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      border-radius: 3px;
+      transition: background 0.15s ease;
+    }
+
+    .task-text:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .task-text.completed {
+      text-decoration: line-through;
+    }
+
+    .countdown {
+      font-size: 14px;
+      opacity: 0.7;
+      margin-left: 8px;
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .task-item:hover .task-actions {
+      opacity: 1;
+    }
+
+    .icon-btn {
+      padding: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app.dark-mode .icon-btn {
+      color: white;
+    }
+
+    .app.light-mode .icon-btn {
+      color: #1a1a1a;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .icon-btn.delete:hover {
+      background: #dc2626;
+    }
+
+    /* Action menu dropdown */
+    .action-menu-dropdown {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      min-width: 180px;
+      padding: 4px 0;
+    }
+
+    .action-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--text-main);
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .action-menu-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .action-menu-item.delete:hover {
+      background: #dc2626;
+      color: white;
+    }
+
+    .action-menu-item .emoji {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
+    .expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      opacity: 0.5;
+      display: flex;
+      align-items: center;
+    }
+
+    .expand-btn:hover {
+      opacity: 1;
+    }
+
+    .task-options {
+      margin-left: 28px;
+      margin-top: 8px;
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .task-options label {
+      display: block;
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 4px;
+    }
+
+    .task-options input,
+    .task-options select {
+      width: 100%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .task-note {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .task-note a {
+      word-break: break-all;
+    }
+
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 100;
+    }
+
+    .modal-bg.hidden {
+      display: none;
+    }
+
+    .modal {
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .modal-header h2 {
+      font-size: 20px;
+      font-weight: 300;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      padding: 4px;
+    }
+
+    .settings-section {
+      margin-bottom: 24px;
+    }
+
+    .settings-section label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .work-days {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .day-btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 10;
+      }
+    }
+
+    /* Completion celebration animations */
+    @keyframes strikeThrough {
+      from {
+        width: 0;
+      }
+      to {
+        width: 100%;
+      }
+    }
+
+    @keyframes taskBounce {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    @keyframes checkboxFlash {
+      0%, 100% {
+        background: transparent;
+      }
+      50% {
+        background: rgba(34, 197, 94, 0.3);
+      }
+    }
+
+    @keyframes confetti {
+      0% {
+        transform: translateY(0) translateX(0) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-50px) translateX(var(--tx)) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    .completing-task {
+      animation: taskBounce 0.3s ease-out;
+    }
+
+    .completing-task input[type="checkbox"] {
+      animation: checkboxFlash 0.3s ease-out;
+    }
+
+    .strike-through-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 2px;
+      background: currentColor;
+      animation: strikeThrough 0.3s ease-out forwards;
+    }
+
+    .confetti-particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: confetti 0.6s ease-out forwards;
+    }
+    
+    /* Sync Status Indicator */
+    .sync-status {
+      position: absolute;
+      top: 12px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--bg-secondary);
+      border-radius: 20px;
+      font-size: 12px;
+      opacity: 0.7;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+      user-select: none;
+    }
+    
+    .sync-status:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    
+    .sync-status.hidden {
+      display: none;
+    }
+    
+    .sync-icon {
+      font-size: 14px;
+      line-height: 1;
+    }
+    
+    .sync-text {
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    
+    /* Hamburger Menu Button */
+    .hamburger-btn {
+      position: absolute;
+      top: 34px; /* Moved down 1 more px for perfect alignment */
+      left: calc(var(--sidebar-width) / 2 - 20px); /* Centered in sidebar area */
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 0;
+      z-index: 100;
+    }
+    
+    /* When sidebar is collapsed, position at left edge */
+    .hamburger-btn.collapsed {
+      left: 16px;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+    
+    .hamburger-btn.collapsed:hover {
+      background: rgba(255, 255, 255, 0.1);
+      opacity: 1;
+    }
+    
+    .hamburger-btn:hover {
+      background: var(--bg-input);
+      transform: scale(1.05);
+    }
+    
+    .hamburger-btn span {
+      width: 24px;
+      height: 3px;
+      background: var(--text-main);
+      border-radius: 2px;
+      transition: all 0.2s ease;
+    }
+    
+    /* Dark mode: ensure hamburger lines are white when collapsed */
+    .app.dark-mode .hamburger-btn.collapsed span {
+      background: white;
+    }
+    
+    /* Light mode: ensure hamburger lines are dark when collapsed */
+    .app.light-mode .hamburger-btn.collapsed span {
+      background: #1a1a1a;
+    }
+    
+    .hamburger-btn.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    // ===== CONSTANTS =====
+    const VIEWS = {
+      TODAY: 'today',
+      NOTEPAD: 'notepad',
+      PROJECTS: 'projects',
+      DUEBY: 'dueby',
+      RECURRING: 'recurring'
+    };
+    
+    const SORT_TYPES = {
+      CREATION: 'creation',
+      ALPHABETICAL: 'alphabetical',
+      DUE_DATE: 'duedate',
+      NEXT_RECURRENCE: 'nextrecurrence'
+    };
+    
+    // ===== HELPER FUNCTIONS =====
+    // Check if current view is a list view (today, notepad, projects, or custom)
+    function isListView() {
+      return [VIEWS.TODAY, VIEWS.NOTEPAD, VIEWS.PROJECTS].includes(state.view) || 
+             state.view.startsWith('custom-');
+    }
+    
       background: #1a1a1a;
       color: white;
     }
