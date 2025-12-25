@@ -257,18 +257,6 @@
       font-size: 16px;
     }
     
-    /* When sidebar is collapsed, add left margin to prevent overlap with hamburger */
-    .hamburger-btn.collapsed ~ * .add-task-form,
-    .app:has(.hamburger-btn.collapsed) .add-task-form {
-      margin-left: 64px; /* Hamburger at 16px + 40px width + 8px gap = 64px */
-    }
-    
-    /* Apply same margin to task lists when sidebar collapsed */
-    .app:has(.hamburger-btn.collapsed) .task-list,
-    .app:has(.hamburger-btn.collapsed) .completed-tasks,
-    .app:has(.hamburger-btn.collapsed) .completed-header {
-      margin-left: 68px; /* 64px collapsed offset + 4px alignment = 68px */
-    }
     
     /* On mobile/tablet, when sidebar is open, add left margin to prevent overlap with hamburger */
     @media (max-width: 768px) {
@@ -320,16 +308,23 @@
         padding-top: 79px; /* 27px + 36px + 16px = 79px for smaller hamburger */
       }
       
-      /* Adjust collapsed margin for smaller hamburger */
-      .app:has(.hamburger-btn.collapsed) .add-task-form {
-        margin-left: 52px; /* 16px + 36px + 8px gap for smaller hamburger */
+      /* On mobile, hamburger also goes to the right when collapsed */
+      .hamburger-btn.collapsed {
+        right: 16px; /* Less padding on mobile */
+        top: 27px; /* Align with mobile spacing */
       }
       
-      /* Apply same margin to task lists when sidebar collapsed on small screens */
+      /* Add right margin for hamburger on mobile */
+      .app:has(.hamburger-btn.collapsed) .add-task-form {
+        margin-right: 52px; /* 36px smaller hamburger + 16px gap */
+        margin-left: 0;
+      }
+      
+      /* No left margin for task lists on mobile when collapsed */
       .app:has(.hamburger-btn.collapsed) .task-list,
       .app:has(.hamburger-btn.collapsed) .completed-tasks,
       .app:has(.hamburger-btn.collapsed) .completed-header {
-        margin-left: 56px; /* 52px collapsed offset + 4px alignment = 56px */
+        margin-left: 4px;
       }
     }
 
@@ -840,17 +835,32 @@
       z-index: 100;
     }
     
-    /* When sidebar is collapsed, position at left edge */
+    /* When sidebar is collapsed, position next to the + button */
     .hamburger-btn.collapsed {
-      left: 16px;
+      left: auto;
+      right: 16px; /* Align with main-content right padding minus some offset */
+      top: 32px; /* Align with add-task-form vertical position */
       background: transparent;
       border: none;
       box-shadow: none;
     }
     
+    /* Add small right margin to add-task-form when hamburger is collapsed to make space */
+    .app:has(.hamburger-btn.collapsed) .add-task-form {
+      margin-right: 56px; /* 40px hamburger + 16px gap */
+      margin-left: 0;
+    }
+    
     .hamburger-btn.collapsed:hover {
       background: rgba(255, 255, 255, 0.1);
       opacity: 1;
+    }
+    
+    /* Remove left margin from task lists when collapsed */
+    .app:has(.hamburger-btn.collapsed) .task-list,
+    .app:has(.hamburger-btn.collapsed) .completed-tasks,
+    .app:has(.hamburger-btn.collapsed) .completed-header {
+      margin-left: 4px; /* Just the normal alignment offset */
     }
     
     .hamburger-btn:hover {
