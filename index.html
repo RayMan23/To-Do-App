@@ -308,11 +308,9 @@
         padding-top: 79px; /* 27px + 36px + 16px = 79px for smaller hamburger */
       }
       
-      /* On mobile, hamburger also goes to the right when collapsed */
+      /* On mobile, collapsed hamburger is also part of flex layout */
       .hamburger-btn.collapsed {
-        right: 72px; /* 16px mobile padding + ~48px button width + 8px gap */
-        top: 27px; /* Align with mobile spacing */
-        width: 40px; /* Slightly smaller on mobile */
+        width: 40px; /* Slightly smaller on mobile to match button */
         height: 40px;
         background: var(--bg-button);
         border: 1px solid var(--border-color);
@@ -320,7 +318,7 @@
         padding: 8px;
       }
       
-      /* Don't add margin on mobile either */
+      /* No margin adjustments needed on mobile either */
       .app:has(.hamburger-btn.collapsed) .add-task-form {
         margin-right: 0;
         margin-left: 0;
@@ -841,13 +839,12 @@
       z-index: 100;
     }
     
-    /* When sidebar is collapsed, position next to the + button */
+    /* When sidebar is collapsed, hamburger is part of the form flex layout */
     .hamburger-btn.collapsed {
-      left: auto;
-      right: 88px; /* 32px main padding + ~48px button width + 8px gap */
-      top: 32px; /* Align with add-task-form vertical position */
+      /* No positioning needed - it's part of the flex container */
       width: 44px; /* Match button proportions */
       height: 44px; /* Match button height */
+      flex-shrink: 0; /* Don't shrink */
       background: var(--bg-button);
       border: 1px solid var(--border-color);
       border-radius: 6px; /* Match .btn border-radius */
@@ -855,7 +852,7 @@
       padding: 10px; /* Adjusted padding to center the lines */
     }
     
-    /* Don't add margin to add-task-form - hamburger is absolutely positioned */
+    /* No margin adjustments needed - flex layout handles spacing */
     .app:has(.hamburger-btn.collapsed) .add-task-form {
       margin-right: 0;
       margin-left: 0;
@@ -3619,12 +3616,14 @@
         <div class="app ${state.darkMode}-mode ${state.showMenu && !state.sidebarCollapsed ? 'sidebar-open' : ''}">
           ${!state.showSettings ? `<div class="click-layer" onclick="toggleMenu()"></div>` : ''}
           
-          <!-- Hamburger Menu Button (always outside sidebar, positioned absolutely) -->
-          <button class="hamburger-btn ${state.showMenu ? '' : 'hidden'} ${state.sidebarCollapsed ? 'collapsed' : ''}" onclick="toggleSidebarCollapse()">
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
+          <!-- Hamburger Menu Button (only show when sidebar is NOT collapsed) -->
+          ${!state.sidebarCollapsed ? `
+            <button class="hamburger-btn ${state.showMenu ? '' : 'hidden'}" onclick="toggleSidebarCollapse()">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+          ` : ''}
           
           <div class="sidebar ${state.showMenu && !state.sidebarCollapsed ? '' : 'hidden'}">
             <nav style="flex: 1">
@@ -3739,6 +3738,13 @@
                 <button class="btn" onclick="const input = document.getElementById('new-task-input'); addTask(input.value); input.value = '';">
                   ➕
                 </button>
+                ${state.sidebarCollapsed ? `
+                  <button class="hamburger-btn collapsed" onclick="toggleSidebarCollapse()">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </button>
+                ` : ''}
               </div>
               
               <div class="task-list">
