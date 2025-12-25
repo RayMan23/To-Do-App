@@ -795,6 +795,10 @@
       cursor: pointer;
       transition: all 0.2s ease;
       user-select: none;
+      width: 100%; /* Match nav-btn width to stay within sidebar */
+      box-sizing: border-box; /* Include padding in width calculation */
+      white-space: nowrap;
+      overflow: hidden;
     }
     
     .sync-status:hover {
@@ -3705,13 +3709,13 @@
             </nav>
             
             <!-- Sync Status Indicator in sidebar -->
-            <div class="sync-status" onclick="event.stopPropagation(); state.showSettings = true; render();" title="Click to open settings">
+            <div class="sync-status" onclick="event.stopPropagation(); state.showSettings = true; render();" title="${googleUser ? (isSyncing ? 'Syncing to Google Drive...' : (lastSyncTime ? `Last synced ${lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - Click for settings` : 'Synced to Google Drive - Click for settings')) : 'Not signed in - Click to sign in'}">
               ${googleUser ? `
                 <span class="sync-icon">${isSyncing ? '⏳' : '✅'}</span>
-                <span class="sync-text">${isSyncing ? 'Syncing...' : (lastSyncTime ? `Synced ${lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Synced')}</span>
+                <span class="sync-text">Sync</span>
               ` : `
                 <span class="sync-icon">⚠️</span>
-                <span class="sync-text">Not signed in</span>
+                <span class="sync-text">Sync</span>
               `}
             </div>
             
